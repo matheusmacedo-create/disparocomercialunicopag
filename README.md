@@ -7,11 +7,22 @@ Com o MCP conectado ao Claude (Claude Code, Claude Desktop, etc.) você pode ped
 > "Lista meus templates aprovados", "Manda o template X de teste pro meu número",
 > "Dispara o template prospeccao_maquininha para data/contatos.csv usando o first_name".
 
+## Conta configurada
+
+| Item | Valor |
+|---|---|
+| Número | +55 21 92367-4860 — *Matheus Macedo -ÚnicoPag Checkout\|Gateway* |
+| Phone Number ID | `1161905150334981` |
+| WABA ID | `1278445183736183` |
+| Business ID | `1127366268551701` |
+
+Esses IDs já são o padrão no código. **Falta apenas o `WHATSAPP_TOKEN`** (nunca faça commit dele).
+
 ## 1. Pré-requisitos na Meta
 
 1. **Business Manager** da Unicopag verificado.
 2. Em [developers.facebook.com](https://developers.facebook.com) → seu App → produto **WhatsApp**:
-   - Anote o **Phone Number ID** e o **WhatsApp Business Account ID (WABA)**.
+   - Confirme que o App está vinculado à WABA `1278445183736183`.
 3. Crie um **token permanente**: Business Manager → Configurações → Usuários do sistema →
    gere um token com `whatsapp_business_messaging` e `whatsapp_business_management`.
 4. Crie e aprove os **templates** (categoria *Marketing* para prospecção) no WhatsApp Manager.
@@ -44,9 +55,7 @@ claude mcp add unicopag-whatsapp -- node /caminho/para/dist/mcp-server.js
       "command": "node",
       "args": ["/caminho/absoluto/disparocomercialunicopag/dist/mcp-server.js"],
       "env": {
-        "WHATSAPP_TOKEN": "EAAG...",
-        "WHATSAPP_PHONE_NUMBER_ID": "...",
-        "WHATSAPP_WABA_ID": "..."
+        "WHATSAPP_TOKEN": "EAAG..."
       }
     }
   }

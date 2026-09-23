@@ -67,6 +67,9 @@ export class WhatsAppClient {
   }
 
   private async request<T>(caminho: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+    if (!this.config.token) {
+      throw new Error("WHATSAPP_TOKEN não configurado: gere o token permanente do usuário do sistema e coloque no .env");
+    }
     const resposta = await fetch(`${this.base}/${caminho}`, {
       method: init.method ?? "GET",
       headers: {
