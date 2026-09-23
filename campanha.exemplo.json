@@ -1,0 +1,6 @@
+{
+  "template": "prospeccao_maquininha",
+  "idioma": "pt_BR",
+  "variaveisCorpo": ["{{first_name|tudo bem}}"],
+  "headerImagemUrl": "https://exemplo.com/banner-unicopag.jpg"
+}
