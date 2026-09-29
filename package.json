@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "mcp": "node dist/mcp-server.js",
     "disparo": "node dist/cli.js",
+    "registrar": "node dist/registrar.js",
     "test": "node --test dist/*.test.js"
   },
   "engines": {

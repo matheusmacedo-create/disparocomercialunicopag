@@ -83,6 +83,36 @@ server.registerTool(
 );
 
 server.registerTool(
+  "whatsapp_registrar_numero",
+  {
+    title: "Registrar número na Cloud API",
+    description:
+      "Registra o número da Unicopag na Cloud API (necessário quando whatsapp_info_numero mostra status DISCONNECTED). " +
+      "etapa=solicitar_codigo envia SMS/ligação; etapa=verificar_codigo confirma o código; etapa=registrar ativa o número com um PIN de 6 dígitos. " +
+      "ATENÇÃO: se o número estiver em uso no app WhatsApp/WhatsApp Business do celular, o app será desconectado.",
+    inputSchema: {
+      etapa: z.enum(["solicitar_codigo", "verificar_codigo", "registrar"]),
+      metodo: z.enum(["SMS", "VOICE"]).default("SMS"),
+      codigo: z.string().regex(/^\d{6}$/).optional().describe("Código recebido (etapa verificar_codigo)"),
+      pin: z.string().regex(/^\d{6}$/).optional().describe("PIN de 6 dígitos da verificação em duas etapas (etapa registrar)"),
+    },
+  },
+  async ({ etapa, metodo, codigo, pin }) => {
+    try {
+      if (etapa === "solicitar_codigo") return json(await client.solicitarCodigo(metodo));
+      if (etapa === "verificar_codigo") {
+        if (!codigo) throw new Error("Informe o código de 6 dígitos recebido");
+        return json(await client.verificarCodigo(codigo));
+      }
+      if (!pin) throw new Error("Informe um PIN de 6 dígitos");
+      return json(await client.registrarNumero(pin));
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
   "whatsapp_listar_templates",
   {
     title: "Listar templates",

@@ -95,8 +95,10 @@ export class WhatsAppClient {
       quality_rating: string;
       messaging_limit_tier?: string;
       code_verification_status?: string;
+      status?: string;
+      name_status?: string;
     }>(
-      `${this.config.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier,code_verification_status`,
+      `${this.config.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier,code_verification_status,status,name_status`,
     );
   }
 
@@ -151,6 +153,30 @@ export class WhatsAppClient {
         type: "text",
         text: { body: texto, preview_url: previewUrl },
       },
+    });
+  }
+
+  /** Passo 1 do registro: a Meta envia um código de 6 dígitos por SMS ou ligação para o número. */
+  solicitarCodigo(metodo: "SMS" | "VOICE" = "SMS", idioma = "pt_BR") {
+    return this.request<{ success: boolean }>(
+      `${this.config.phoneNumberId}/request_code?code_method=${metodo}&language=${idioma}`,
+      { method: "POST" },
+    );
+  }
+
+  /** Passo 2 do registro: confirma o código recebido. */
+  verificarCodigo(codigo: string) {
+    return this.request<{ success: boolean }>(
+      `${this.config.phoneNumberId}/verify_code?code=${encodeURIComponent(codigo)}`,
+      { method: "POST" },
+    );
+  }
+
+  /** Passo 3: registra o número na Cloud API. O PIN vira a verificação em duas etapas do número. */
+  registrarNumero(pin: string) {
+    return this.request<{ success: boolean }>(`${this.config.phoneNumberId}/register`, {
+      method: "POST",
+      body: { messaging_product: "whatsapp", pin },
     });
   }
 }

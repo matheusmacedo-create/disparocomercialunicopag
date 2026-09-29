@@ -28,6 +28,20 @@ Esses IDs já são o padrão no código. **Falta apenas o `WHATSAPP_TOKEN`** (nu
 4. Crie e aprove os **templates** (categoria *Marketing* para prospecção) no WhatsApp Manager.
    Mensagem que *você* inicia só pode ser enviada como template aprovado.
 
+### Registrar o número (status DISCONNECTED)
+
+Se `whatsapp_info_numero` mostrar `status: DISCONNECTED`, o número ainda não está ativo na Cloud API:
+
+```bash
+npm run registrar -- status
+npm run registrar -- solicitar SMS        # código chega por SMS no +55 21 92367-4860
+npm run registrar -- verificar 123456     # código recebido
+npm run registrar -- registrar 654321     # PIN de 6 dígitos (guarde: é a verificação em 2 etapas)
+```
+
+> Se o número estiver ativo no app WhatsApp/WhatsApp Business do celular, ele será desconectado do app
+> ao registrar na Cloud API. Apague a conta no app antes, ou use outro número.
+
 ## 2. Instalação
 
 ```bash
@@ -67,6 +81,7 @@ claude mcp add unicopag-whatsapp -- node /caminho/para/dist/mcp-server.js
 | Ferramenta | O que faz |
 |---|---|
 | `whatsapp_info_numero` | Nome verificado, qualidade (GREEN/YELLOW/RED) e limite diário |
+| `whatsapp_registrar_numero` | Solicita código, verifica e registra o número na Cloud API |
 | `whatsapp_listar_templates` | Templates da WABA, com filtro por status |
 | `whatsapp_enviar_template` | Envia um template para 1 número (teste) |
 | `whatsapp_enviar_texto` | Texto livre (só entrega dentro da janela de 24h) |
