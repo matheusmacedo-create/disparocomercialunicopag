@@ -261,7 +261,7 @@ class Campaign extends Model
 
         $this->forceFill([
             'total_destinatarios' => (int) $porStatus->sum(),
-            'enviados' => $n(CampaignRecipient::STATUS_ENVIADO) + $n(CampaignRecipient::STATUS_ENTREGUE) + $n(CampaignRecipient::STATUS_LIDO) + $n(CampaignRecipient::STATUS_RESPONDIDO),
+            'enviados' => array_sum(array_map($n, CampaignRecipient::STATUS_ENVIADOS)),
             'entregues' => $n(CampaignRecipient::STATUS_ENTREGUE) + $n(CampaignRecipient::STATUS_LIDO) + $n(CampaignRecipient::STATUS_RESPONDIDO),
             'lidos' => $n(CampaignRecipient::STATUS_LIDO) + $n(CampaignRecipient::STATUS_RESPONDIDO),
             'respondidos' => $n(CampaignRecipient::STATUS_RESPONDIDO),

@@ -161,7 +161,7 @@ class Journey extends Model
                 'status' => JourneyEnrollment::STATUS_ATIVA,
                 'proximo_em' => now(),
                 'iniciada_em' => now(),
-                'motivo_saida' => $origem,
+                'motivo_saida' => null,
                 'inscrito_por' => $userId,
             ],
         );
