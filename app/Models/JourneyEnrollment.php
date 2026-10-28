@@ -50,7 +50,7 @@ class JourneyEnrollment extends Model
     /** Quantos passos pulados ficam guardados por inscrição (os mais antigos saem). */
     public const MAX_PASSOS_PULADOS = 50;
 
-    protected $fillable = ['journey_id', 'contact_id', 'passo_atual', 'status', 'chave_ativa', 'inscrito_por', 'proximo_em', 'motivo_saida', 'ultimo_wamid', 'passos_pulados', 'ultimo_motivo', 'iniciada_em', 'encerrada_em', 'convertido_em', 'conversao_origem'];
+    protected $fillable = ['journey_id', 'contact_id', 'passo_atual', 'status', 'chave_ativa', 'inscrito_por', 'origem', 'proximo_em', 'motivo_saida', 'ultimo_wamid', 'passos_pulados', 'ultimo_motivo', 'iniciada_em', 'encerrada_em', 'convertido_em', 'conversao_origem'];
 
     public static function chaveAtiva(int $journeyId, int $contactId): string
     {

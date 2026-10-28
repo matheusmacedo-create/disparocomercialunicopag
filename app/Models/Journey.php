@@ -165,6 +165,7 @@ class Journey extends Model
                 'iniciada_em' => now(),
                 'motivo_saida' => null,
                 'inscrito_por' => $userId,
+                'origem' => $origem !== null ? mb_substr($origem, 0, 20) : null,
             ],
         );
 

@@ -184,7 +184,7 @@ class ProcessadorDeReguasTest extends TestCase
 
         $this->assertSame(1, $daLista->enrollments()->count());
         $this->assertSame(0, $rascunho->enrollments()->count(), 'régua em rascunho não inscreve');
-        $this->assertSame('lista', $daLista->enrollments()->sole()->motivo_saida);
+        $this->assertSame('lista', $daLista->enrollments()->sole()->origem);
 
         // Repetir a pertinência ou entrar em outra base não duplica.
         $lista->contacts()->syncWithoutDetaching([$contato->id => ['adicionado_em' => now()]]);
@@ -229,7 +229,7 @@ class ProcessadorDeReguasTest extends TestCase
         $this->travelTo(now()->addDays(8));
         $this->assertSame(1, app(ProcessadorDeReguas::class)->reavaliarSegmentos()['inscritos']);
         $this->assertSame(2, $leads->first()->journeyEnrollments()->count());
-        $this->assertSame('segmento', $leads->first()->journeyEnrollments()->latest('id')->first()->motivo_saida);
+        $this->assertSame('segmento', $leads->first()->journeyEnrollments()->latest('id')->first()->origem);
     }
 
     public function test_intervalo_minimo_da_regua_pula_o_segundo_template_e_registra_o_motivo(): void

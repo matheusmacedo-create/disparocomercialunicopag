@@ -26,7 +26,12 @@ class ProcessarImportacaoJob implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public readonly int $importacaoId) {}
+    public readonly int $importacaoId;
+
+    public function __construct(int|ContactImport $importacao)
+    {
+        $this->importacaoId = $importacao instanceof ContactImport ? $importacao->id : $importacao;
+    }
 
     public function handle(ImportadorCsv $importador): void
     {

@@ -12,14 +12,14 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
-/** processar-reguas e podar (chamadas tolerantes a classes de outras frentes), sincronizar-templates e registrar-numero. */
+/** processar-reguas e podar (com o processador e a retenção reais, e com substitutos no container), sincronizar-templates e registrar-numero. */
 class OutrosComandosTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_processar_reguas_sem_a_classe_avisa_e_com_stub_chama(): void
+    public function test_processar_reguas_roda_o_processador_e_aceita_substituto(): void
     {
-        $this->artisan('disparo:processar-reguas')->expectsOutputToContain('ainda não existe')->assertSuccessful();
+        $this->artisan('disparo:processar-reguas')->expectsOutputToContain('reguas: 0')->assertSuccessful();
 
         app()->bind('App\Services\Reguas\ProcessadorDeReguas', fn () => new class
         {
@@ -38,12 +38,12 @@ class OutrosComandosTest extends TestCase
         $this->artisan('disparo:processar-reguas --segmentos')->expectsOutputToContain('inscritos: 4')->assertSuccessful();
     }
 
-    public function test_podar_apaga_webhook_calls_antigos_e_chama_a_retencao_quando_existe(): void
+    public function test_podar_apaga_webhook_calls_antigos_e_roda_a_retencao(): void
     {
         WebhookCall::query()->create(['provider' => 'kapso', 'created_at' => now()->subDays(40)]);
         WebhookCall::query()->create(['provider' => 'kapso', 'created_at' => now()->subDays(2)]);
 
-        $this->artisan('disparo:podar')->expectsOutputToContain('1 registro(s) com mais de 30 dias')->expectsOutputToContain('ainda não existe')->assertSuccessful();
+        $this->artisan('disparo:podar')->expectsOutputToContain('1 registro(s) com mais de 30 dias')->expectsOutputToContain('leads_anonimizados: 0')->assertSuccessful();
         $this->assertSame(1, WebhookCall::query()->count());
 
         app()->bind('App\Services\Importacao\Retencao', fn () => new class

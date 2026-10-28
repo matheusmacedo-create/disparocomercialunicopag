@@ -18,13 +18,15 @@ return new class extends Migration
             $table->json('passos_pulados')->nullable()->after('ultimo_wamid');
             // Último motivo de guarda ou de recusa visto nesta inscrição (também quando só adiou).
             $table->string('ultimo_motivo', 100)->nullable()->after('passos_pulados');
+            // Por onde o contato entrou: manual, lista, tag, segmento, api... (não é motivo de saída).
+            $table->string('origem', 20)->nullable()->after('inscrito_por');
         });
     }
 
     public function down(): void
     {
         Schema::table('journey_enrollments', function (Blueprint $table): void {
-            $table->dropColumn(['passos_pulados', 'ultimo_motivo']);
+            $table->dropColumn(['passos_pulados', 'ultimo_motivo', 'origem']);
         });
     }
 };

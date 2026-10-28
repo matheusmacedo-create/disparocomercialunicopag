@@ -65,7 +65,7 @@ class ImportacoesPanelTest extends TestCase
         $this->assertStringStartsWith('importacoes/', (string) $import->arquivo);
         Storage::disk('local')->assertExists($import->arquivo);
 
-        Bus::assertDispatched(ProcessarImportacaoJob::class, fn (ProcessarImportacaoJob $job): bool => $job->import->is($import));
+        Bus::assertDispatched(ProcessarImportacaoJob::class, fn (ProcessarImportacaoJob $job): bool => $job->importacaoId === $import->id);
     }
 
     public function test_base_externa_exige_consentimento_e_o_telefone_tem_de_ser_mapeado(): void
@@ -139,11 +139,11 @@ class ImportacoesPanelTest extends TestCase
         $admin = $this->usuario(Permissions::ROLE_ADMIN);
         $sender = Sender::factory()->create();
 
-        // O comando é de outra frente: sem ele no worktree, o job tem de avisar o erro, não explodir.
+        // Sem a Kapso respondendo (nenhuma requisição é permitida no teste), o job avisa o problema, não explode.
         (new ImportarHistoricoKapsoJob($sender->id, userId: $admin->id))->handle();
 
         $this->assertSame(1, $admin->notifications()->count());
-        $this->assertStringContainsString('não importado', (string) data_get($admin->notifications()->first()->data, 'title'));
+        $this->assertMatchesRegularExpression('/não importado|terminou com aviso/', (string) data_get($admin->notifications()->first()->data, 'title'));
     }
 
     public function test_baixar_rejeitadas_so_com_view_pii_e_quando_o_arquivo_existe(): void

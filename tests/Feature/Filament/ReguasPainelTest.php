@@ -51,8 +51,8 @@ class ReguasPainelTest extends TestCase
                 'passos' => [
                     ['tipo' => JourneyStep::TIPO_TEMPLATE, 'template_chave' => $this->template->nome.'|pt_BR', 'mapeamento' => [['variavel' => 'primeiro_nome', 'padrao' => 'tudo bem']]],
                     ['tipo' => JourneyStep::TIPO_AGUARDAR, 'aguardar_horas' => 120],
-                    ['tipo' => JourneyStep::TIPO_CONDICAO, 'condicao' => JourneyStep::CONDICAO_SE_NAO_RESPONDEU],
                     ['tipo' => JourneyStep::TIPO_TEXTO, 'texto' => 'Oi {{primeiro_nome|tudo bem}}, segue o link.'],
+                    ['tipo' => JourneyStep::TIPO_CONDICAO, 'condicao' => JourneyStep::CONDICAO_SE_NAO_RESPONDEU],
                 ],
             ])
             ->call('create')
@@ -64,7 +64,7 @@ class ReguasPainelTest extends TestCase
         $this->assertSame([1, 2, 3, 4], $regua->steps()->pluck('ordem')->all());
         $this->assertSame(['{{primeiro_nome|tudo bem}}'], $regua->steps()->first()->variaveis['corpo']);
         $this->assertSame(120, $regua->steps()->where('ordem', 2)->first()->aguardar_horas);
-        $this->assertSame('Oi {{primeiro_nome|tudo bem}}, segue o link.', $regua->steps()->where('ordem', 4)->first()->variaveis['texto']);
+        $this->assertSame('Oi {{primeiro_nome|tudo bem}}, segue o link.', $regua->steps()->where('ordem', 3)->first()->variaveis['texto']);
 
         Livewire::test(ViewJourney::class, ['record' => $regua->getRouteKey()])
             ->assertOk()
