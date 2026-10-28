@@ -58,6 +58,6 @@ class ContactList extends Model
 
     public function contacts(): BelongsToMany
     {
-        return $this->belongsToMany(Contact::class, 'contact_list_contact')->withPivot(['adicionado_em', 'contact_import_id']);
+        return $this->belongsToMany(Contact::class, 'contact_list_contact')->using(ContactListContact::class)->withPivot(['adicionado_em', 'contact_import_id']);
     }
 }

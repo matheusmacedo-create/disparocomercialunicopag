@@ -179,14 +179,16 @@ class Contact extends Model
         return null;
     }
 
+    /** Pivot com classe própria: `attach()`/`sync()` disparam o gatilho "tag" das réguas. */
     public function tags(): BelongsToMany
     {
-        return $this->belongsToMany(Tag::class)->withPivot('created_at');
+        return $this->belongsToMany(Tag::class)->using(ContactTag::class)->withPivot('created_at');
     }
 
+    /** Pivot com classe própria: `attach()`/`sync()` disparam o gatilho "lista" das réguas. */
     public function lists(): BelongsToMany
     {
-        return $this->belongsToMany(ContactList::class, 'contact_list_contact')->withPivot(['adicionado_em', 'contact_import_id']);
+        return $this->belongsToMany(ContactList::class, 'contact_list_contact')->using(ContactListContact::class)->withPivot(['adicionado_em', 'contact_import_id']);
     }
 
     public function messages(): HasMany
