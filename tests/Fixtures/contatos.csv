@@ -1,0 +1,7 @@
+﻿Telefone;NOME;E-mail;CPF;Loja;Oferta;Cidade
+(21) 99876-5432;MARIA DAS DORES SILVA;maria@exemplo.com;123.456.789-09;LOJA DA MARIA;taxa zero;Niterói
+5521988887777;45.678.901 JOAO DA SILVA;joao@exemplo.com;;;maquininha;Rio
++55 21 97777-6666;Ana Souza;ana@exemplo.com;;Loja da Ana;;Rio
+123;Telefone Quebrado;;;;;
+21998765432;Maria Repetida;;;;;
+;Sem Telefone;;;;;

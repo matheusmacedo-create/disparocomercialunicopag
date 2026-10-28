@@ -1,0 +1,8 @@
+{
+  "data": [
+    {"account_id": "1001", "telefone": "(21) 99111-2233", "nome": "CARLOS ALBERTO", "email": "carlos@exemplo.com", "ultima_venda_em": "2026-05-01", "dias_sem_venda": 180, "etapa": "configurado_sem_venda", "aprovado_em": "2026-04-10"},
+    {"account_id": "1002", "nome": "Seller Sem Fone", "etapa": "nada_configurado"},
+    {"account_id": "1003", "ultima_venda_em": "2026-10-20", "etapa": "vendeu"},
+    {"account_id": "1004", "nome": "Ninguem Sabe", "etapa": "nada_configurado"}
+  ]
+}

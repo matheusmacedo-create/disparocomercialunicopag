@@ -215,6 +215,27 @@ Regras do CSV: `,` ou `;` detectado, BOM, coluna de telefone detectada (`phone`,
 merge), contato `optout`/`anonimizado` entra na base e segue bloqueado; coluna com nome sensível (cpf,
 cnpj, rg, endereço, nascimento, renda, senha) só vai para campo tipado ou é ignorada.
 
+Como a importação de CSV se comporta `[código]` (`ImportadorCsv`, job `ProcessarImportacaoJob`):
+- Mapeamento coluna => `telefone | nome | primeiro_nome | email | documento | empresa | account_id |
+  atributos.<chave> | ignorar`, sugerido pelo cabeçalho (`sugerirMapeamento`). **Denylist**: coluna cujo nome
+  (ou chave de atributo) contém cpf, cnpj, documento, rg, endereco, nascimento, renda ou senha só vai para
+  `documento` (criptografado) ou `ignorar` - nunca para `atributos`, que viram variável de template em claro.
+- Prévia (`previa()`): 10 primeiras linhas mapeadas e normalizadas + contagem prevista do arquivo inteiro
+  (criados, atualizados, inválidos, duplicados, sem consentimento), sem gravar nada.
+- Precedência do nome entre fontes (`contacts.nome_origem`): unicoapi/unicopag > csv/unicodrop > kapso >
+  manual. O nome de uma planilha tem sempre precedência `csv`, qualquer que seja o rótulo de origem; a Kapso
+  (perfil do WhatsApp) só preenche vazio e guarda o perfil em `atributos.whatsapp_profile`. Nome em CAIXA
+  ALTA vira Title Case; nome sem letra (só emoji) não é nome; `primeiro_nome` nunca tem dígito.
+- Origem é a da primeira vez que o telefone apareceu; o tipo é o que a importação diz; consentimento só
+  preenche vazio. Base com `exige_consentimento` (ou origem externa) sem consentimento informado: importa
+  mesmo assim e conta em `sem_consentimento` - a guarda `sem_consentimento` barra o MARKETING.
+- Telefone já suprimido (pediu para parar, anonimizado, lista de opt-out) entra como `optout`.
+- `tipo=optout`: cada telefone vira supressão `importacao` (escopo tudo, origem csv); nenhum contato é criado.
+- TODAS as rejeitadas vão para `storage/app/private/importacoes/{id}/rejeitadas.csv` (linha, telefone
+  mascarado, referência, motivo; `;` e BOM para o Excel) - `ContactImport::baixarRejeitadas()`; `erros`
+  guarda só as 100 primeiras. O arquivo original é apagado depois de processar. Quem importou recebe
+  notificação no sininho (sem PII).
+
 ### 4.5 Templates (`message_templates`)
 Cache por remetente do que a Meta devolve (`nome` até 512, `idioma`, `categoria`, `status`,
 `parameter_format`, `componentes`, `qualidade`). **O cache serve ao painel e à prévia; a decisão de envio
@@ -383,6 +404,35 @@ por (telefone, template, ±30 min); `suppressed` → supressão de marketing; `e
 `historico_importado_ate` − 1 h. Agendada todo dia às 03:00 e a cada 15 min enquanto houver campanha em
 andamento. Registrar `[prod]` aqui o que de fato veio em `messages`/`conversations` na primeira rodada real.
 
+Como o `ImportadorKapso` faz de fato `[código]` (o formato das respostas da Kapso segue `[inferido]`: a
+leitura dos campos é tolerante e a primeira importação real deve anotar aqui o que veio):
+- Janela: `--desde/--ate` explícitos; `--incremental` parte de `historico_importado_ate` menos 60 min
+  (`historico.folga_incremental_minutos`); sem nada, `historico.janela_inicial_dias` (180). O cursor nunca volta.
+- **Texto nunca é gravado** (`conteudo` nulo em `historico_kapso`): a inbound passa em memória pelo
+  `ClassificadorDeResposta::classificar` COMPLETO, com contexto - `respondeATemplate` = o `context.id` aponta
+  para template outbound do mesmo remetente OU houve template outbound ao telefone nos 7 dias ANTERIORES à
+  inbound (`historico.resposta_janela_dias`). Outbound é importado antes de inbound por isso.
+  PARAR → supressão `historico` (origem `historico_kapso`, wamid, criada no momento da resposta);
+  PEDIDO_LGPD → idem + `contact_events.pedido_lgpd`; NAO_AGORA a template MARKETING (categoria do payload ou
+  do cache de templates) → `registrarRecusa` com a data da resposta (recusa antiga não rejuvenesce a carência).
+  Nada é reclassificado em importação repetida (só mensagem nova classifica).
+- Conversas: criam/atualizam o contato (origem kapso, tipo outro), `kapso_conversation_id`, `kapso_contact_id`,
+  `ultima_resposta_em`/`ultimo_envio_em` (só avançam). `--contatos` só completa quem já existe (a lista inclui
+  o atendimento inteiro). Mensagem que já estava na trilha (saiu daqui) tem a entrega reconciliada (só avança:
+  `pending`/`enviado_incerto` vira o que a Kapso diz).
+- Broadcasts: cada destinatário vira outbound `broadcast_kapso` com `external_key = broadcast:{id}:{rid}`,
+  casado com mensagem existente por (telefone, template, ±30 min) para não contar em dobro; `suppressed` →
+  supressão `meta_marketing_stopped` escopo marketing do remetente; `error_details.code` 131026 →
+  `sem_whatsapp_em` do evento, 131049 → carência contada do evento. Broadcast fora da janela é pulado.
+- Rate limit: `KapsoClient::rateLimitRestante()` < 20 → espera 15 s antes da próxima página; 429 → espera o
+  `Retry-After` e repete até 3 vezes. Resultado em `contact_imports` (tipo kapso, `resultado` com mensagens,
+  contatos, classificações e supressões por motivo); o comando imprime o relatório sem PII.
+
+Preferências de marketing (`GET /platform/v1/whatsapp/contacts/{telefone}/marketing_preferences`) são
+consultadas uma a uma, então só sob demanda: ação "Conferir preferências na Meta" no público de uma
+campanha MARKETING e no detalhe do contato; `stopped` vira supressão `meta_marketing_stopped` de escopo
+`marketing` naquele remetente.
+
 ## 8. Comandos e agenda `[código]`
 
 | Comando | Agenda (America/Sao_Paulo) | O que faz |
@@ -398,7 +448,20 @@ andamento. Registrar `[prod]` aqui o que de fato veio em `messages`/`conversatio
 | `disparo:diagnostico` | manual | batimentos (agendador por minuto, worker a cada 5 min), interruptor, pepper, remetentes e webhooks na Kapso, webhooks sem processar |
 | `disparo:podar` | 04:00 | retenção (seção 2.13) |
 
-## 9. Sellers inativos (unico-api) `[decisão]` `[inferido]`
+## 9. Sellers inativos (unico-api) `[código]` `[decisão]` `[inferido]`
+
+O que existe `[código]` (`ImportadorSellersInativos`, `UnicopagClient`): a fonte é um contrato JSON (lista de
+`{account_id, telefone?, nome?, email?, ultima_venda_em?, dias_sem_venda?, etapa?, aprovado_em?}`), de
+`UNICOPAG_SELLERS_ENDPOINT` (`{dias}` substituído, `links.next` seguido) ou de `--arquivo`. Telefone faltando:
+`GET register` por conta, com chave própria do Disparo; só telefone e nome normalizados vão para o cache (24 h).
+Sem telefone em lugar nenhum a conta é rejeitada (erros + rejeitadas.csv com o account_id) e **nunca vira
+contato**. Contato: origem unicopag, tipo seller_inativo, `account_id`, atributos `ultima_venda_em`,
+`dias_sem_venda`, `etapa`, `data_cadastro` (as variáveis do template de recuperação), consentimento
+`cliente_ativo`, base "Sellers inativos" (`sellers-inativos`, criada se faltar). **Base viva**: venda mais
+recente que `--dias` ou etapa `vendeu` → tipo seller_ativo, tag `voltou_a_vender`, sai da base, inscrição
+ativa em régua ganha `convertido_em/conversao_origem=venda` e encerra `converteu` (se `sair_ao_converter`),
+destinatários de campanha com envio nos 30 dias antes da venda ganham a conversão. Quem volta a ficar inativo
+reentra na base sem a tag.
 
 O usuário só de leitura no RDS que o KYC pediu em 18/10 **não existe** (as aplicações não têm CREATE USER
 nem GRANT; KB do KYC 8.23) e a rota de cadastro `GET /api/kyc-panel/accounts/{id}/register` responde 401 à
@@ -545,6 +608,17 @@ em relação ao desenho original: processamento do webhook inline (não na fila)
 `insertOrIgnore` e `processado_em`, chave aleatória na URL em vez do id do remetente, segredo por remetente sem
 fallback de `.env`, `pricing.category` do status, wamid desconhecido contando no teto.
 
+### 2026-10-28 - Importação, histórico da Kapso, sellers inativos, anonimização e retenção (frente B)
+`ImportadorCsv` (prévia, denylist, rejeitadas.csv, precedência do nome), `ImportadorKapso` (texto só em
+memória, classificação com contexto, broadcasts casados, rate limit), `ImportadorSellersInativos` (base
+viva, conversão), `AnonimizarContato` (telefone vira `anon:<hash12>` em todas as tabelas, supressão pelo
+hash gravada ANTES de trocar o telefone, do payload sobra só a categoria) e `ExportarDadosDoTitular`
+(direito de acesso), `Retencao::executar()` (conteúdo/payload/variáveis > 180 dias, lead externo parado >
+12 meses anonimizado, failed_jobs > 7 dias, webhook_calls > 30 dias, arquivo de importação). Colunas novas:
+`contacts.nome_origem`, `contacts.kapso_conversation_id`, `contact_imports.sem_consentimento`,
+`contact_imports.resultado` (migration 000014). Decisão registrada: nome sem letra (só emoji) nunca vira
+nome; o nome de planilha tem sempre precedência `csv`. A agenda (03:00 e incremental a cada 15 min com campanha em andamento) e a chamada de `Retencao` em
+`disparo:podar` vieram com a frente A.
 
 ### 2026-10-28 - Nascimento da plataforma
 Repositório reorganizado: a CLI/MCP em TypeScript foi para `mcp/` (envio real desligado); a raiz passa a
