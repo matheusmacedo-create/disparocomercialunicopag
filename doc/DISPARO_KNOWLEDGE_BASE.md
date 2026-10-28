@@ -269,6 +269,42 @@ resposta, uma vez) | `aguardar` | `condicao` (`se_nao_respondeu` | `se_respondeu
 `pausada` | `falhou`), `chave_ativa` única enquanto ativa (uma por contato, mesmo com dois workers),
 `proximo_em`, `motivo_saida` (`respondeu`, `pediu_para_parar`, `converteu`, ...), `convertido_em`.
 
+#### 4.9.1 Como a régua roda `[código 28/10/2026]`
+
+`ProcessadorDeReguas::rodar()` (a cada 10 min por `disparo:processar-reguas`), régua `status=ativa`, inscrições
+`ativa` com `proximo_em` vencido, remetente a remetente sob a **mesma trava** das campanhas
+(`TravaDoRemetente`; remetente ocupado é pulado na rodada). Com `DISPARO_ENVIO_HABILITADO=false` a rodada só
+registra no log: régua não tem prévia nem "simulado" (marcar o passo avançaria a inscrição sem nada ter
+chegado). Ordem do que respeita: `Guardas::motivoDoRemetente` (pausa, RED, janela, teto); orçamento do número
+= teto efetivo − templates das últimas 24 h (a reserva de 30 % das réguas é delas, não é descontada) e o teto
+de MARKETING; `max_por_dia` da régua (templates `origem=regua` das inscrições dela em 24 h); por contato as
+guardas com `origem=regua`: **intervalo mínimo da régua** (`intervalo_minimo_horas`, estrito, só entre
+templates de régua ao telefone neste remetente) no lugar da frequência de campanha, mais o total de 4 em 30 d
+(`regua_max_30d`), e conversa aberta ignorada só em UTILITY quando `ignora_conversa_aberta`.
+
+Passos (`passo_atual` é sempre o PRÓXIMO a executar): `template` envia (`Despachante`, `journey_enrollment_id`
+na mensagem, `ultimo_wamid` na inscrição); guarda que só adia (janela no fuso do contato) → `proximo_em` na
+próxima abertura; guarda que descarta ou recusa do contato (131026, 131050, variável vazia...) → o passo é
+**pulado e registrado** em `passos_pulados` (`[{passo, tipo, motivo, em}]`, últimos 50) e `ultimo_motivo`;
+`aguardar` → `proximo_em = agora + horas` e `passo_atual` já aponta para o seguinte; `condicao`
+(`se_nao_respondeu` | `se_respondeu` | `se_nao_entregue` | `se_nao_leu`) olha o último template da inscrição e
+`contacts.ultima_resposta_em` depois dele; não atendida → `concluida` com `condicao_nao_atendida`; `tag` anexa
+(e dispara o gatilho `tag` de outras réguas); `texto` só com resposta do contato nas últimas 24 h
+(`Despachante::enviarTexto`, uma vez; senão pulado como `janela_fechada`) - por isso só faz sentido logo depois
+de um `aguardar`: a inscrição fica parada nele e o webhook (`ProcessadorDeEventos`) antecipa `proximo_em`
+quando a resposta chega (`FluxoDeRegua::problemas` acusa texto sem `aguardar` antes); `encerrar` ou fim dos
+passos → `concluida`. Recusa de conta/qualidade passa pelo `Disjuntor` compartilhado (abaixo) e para a rodada;
+transitória reagenda a inscrição em 15 min, três seguidas param a rodada (`instabilidade`); a régua também
+manda a sonda de 1 quando o remetente está impedido e a sonda venceu.
+
+Gatilhos: `lista` e `tag` disparam no `attach()`/`sync()` das pivots `ContactListContact` e `ContactTag`
+(observers em `app/Observers`; `DB::table()->insert()` direto passa por fora - chame
+`ProcessadorDeReguas::inscreverPorGatilho()`); só contato `ativo` entra. `segmento`:
+`reavaliarSegmentos()` (uma vez por dia) inscreve quem bate em `ConsultaDeSegmento` sem inscrição ativa;
+quem já passou só volta depois de `reinscrever_apos_dias` (nulo = nunca). Conversão:
+`JourneyEnrollment::converter($origem)` grava `convertido_em`/`conversao_origem` (a primeira fica) e, com
+`sair_ao_converter`, encerra `saiu` com `converteu`. `sair_ao_responder` fica no `ProcessadorDeEventos`.
+
 ### 4.10 Outras
 `sender_quality_snapshots` (qualidade/tier/status por hora: alimenta o aquecimento e o gráfico),
 `sender_events`, `contact_events`, `webhook_calls` (append-only, 30 dias, resumo sem PII, chave de
@@ -291,6 +327,18 @@ Duas tabelas, porque dois efeitos diferentes:
 Orçamento da rodada = teto efetivo − saídos nas 24 h (qualquer origem) − reserva das réguas não usada;
 MARKETING ainda limitado a 30% do teto; `max_por_dia` da campanha; ritmo `msgs_por_minuto`; rodada de
 até 50 s por tick; `enviando` órfão há 10 min vira `enviado_incerto`.
+
+Disjuntor (`App\Services\Envio\Disjuntor`, compartilhado por campanhas e réguas `[código 28/10/2026]`):
+`contaImpedida()` (pagamento, token, saldo, Sandbox, 401-404) → pausa o remetente com `sonda_em =
++sonda_intervalo_minutos` (120) e pausa a campanha de origem; `bloqueioPorQualidade()` (131048, 368, 131031,
+disjuntor de engajamento) → trava o remetente sem sonda e **cancela** as campanhas MARKETING em andamento dele
+(UTILITY de origem só pausa); os dois registram `sender_events` e alertam no Discord. A sonda sai pela campanha
+pausada pelo disjuntor (ou por uma régua ativa do remetente): se passa, o remetente despausa e a campanha
+pausada automaticamente volta a `em_andamento` (evento `retomada` automático). `transitoria()` → espera 2^n s
+(`lote.backoff_maximo_segundos`), até 2 tentativas por destinatário com 60 s entre elas; três transitórias
+seguidas pausam a campanha sem pausar o remetente. A prévia pré-carrega o histórico por lote
+(`Guardas::historicoPorTelefone`: último template, último de régua, contagem 30 d por remetente, MARKETING
+30/90 d global) e `motivoDoContato` aceita esse mapa em vez de consultar o banco por contato.
 
 ## 6. Classificação da resposta `[código]`
 
@@ -426,6 +474,15 @@ escondida; `status` das campanhas e réguas não é campo de formulário.
   Kapso).
 
 ## Histórico de atualizações
+
+### 2026-10-28 - Réguas rodando, disjuntor compartilhado, suíte do núcleo
+`ProcessadorDeReguas` (4.9.1), `Disjuntor` extraído do executor (5), observers de base/tag, `passos_pulados`
+e `ultimo_motivo` na inscrição (migration 000013), `JourneyEnrollment::converter`. Guardas: intervalo mínimo
+da régua por `intervalo_minimo_horas` (estrito), histórico em lote para a prévia, e correção de precedência
+que deixava `sem_consentimento` morto para contato de origem externa quando a campanha informava
+`exige_consentimento=false`. `whatsapp_messages.user_id` entrou no `$fillable` (o texto do painel estourava).
+Suíte: guardas (cada motivo), teto efetivo, supressões, executor (as classes de recusa, tranche, orçamento,
+janela), despachante, processador de eventos direto e réguas.
 
 ### 2026-10-28 - Nascimento da plataforma
 Repositório reorganizado: a CLI/MCP em TypeScript foi para `mcp/` (envio real desligado); a raiz passa a

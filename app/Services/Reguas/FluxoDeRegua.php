@@ -44,7 +44,17 @@ final class FluxoDeRegua
             $problemas[] = 'Gatilho por base, tag ou segmento precisa dizer qual.';
         }
 
+        $anterior = null;
+
         foreach ($passos as $passo) {
+            // O texto na resposta só dispara enquanto a inscrição ESPERA nele (o webhook antecipa o passo ao
+            // chegar a resposta): sem um "aguardar" antes, ele é alcançado na mesma passada do template e pulado.
+            if ($passo->tipo === JourneyStep::TIPO_TEXTO && $anterior?->tipo !== JourneyStep::TIPO_AGUARDAR) {
+                $problemas[] = sprintf('Passo %d: o texto na resposta precisa vir logo depois de um passo "aguardar" (é durante a espera que a resposta do contato o dispara).', $passo->ordem);
+            }
+
+            $anterior = $passo;
+
             if ($passo->tipo === JourneyStep::TIPO_TEMPLATE) {
                 $template = MessageTemplate::query()->where('sender_id', $sender->id)->where('nome', (string) $passo->template_nome)->where('idioma', (string) ($passo->template_idioma ?: 'pt_BR'))->first();
 

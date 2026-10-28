@@ -120,11 +120,17 @@ return [
         'tempo_maximo_segundos' => 50,
         // Trava da rodada por remetente (s), bem acima da rodada: só vale para processo que morreu.
         'trava_segundos' => 600,
+        // Espera (s) depois de um erro transitório do provedor: 2^n até este máximo. Os testes zeram.
+        'backoff_maximo_segundos' => 10,
     ],
 
     'reguas' => [
         'rodada_minutos' => 10,
         'reavaliar_segmentos_as' => '09:30',
+        // Orçamento de tempo da rodada das réguas (s): abaixo dos 10 min do agendador.
+        'tempo_maximo_segundos' => 540,
+        // Erro transitório num passo da régua: a inscrição tenta de novo depois de N minutos.
+        'reagendar_transitoria_minutos' => 15,
     ],
 
     'historico' => [

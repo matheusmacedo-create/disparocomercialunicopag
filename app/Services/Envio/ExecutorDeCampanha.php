@@ -38,6 +38,7 @@ final class ExecutorDeCampanha
         private readonly DiscordNotifier $discord,
         private readonly MontadorDePublico $publico,
         private readonly WhatsAppClientFactory $clientes,
+        private readonly Disjuntor $disjuntor,
     ) {}
 
     /**
@@ -240,6 +241,13 @@ final class ExecutorDeCampanha
                 if ($sonda) {
                     $sender->despausar();
                     $campaign->registrarEvento('sonda_passou', ['sender_id' => $sender->id], null);
+
+                    // A pausa era do disjuntor (automática), não de gente: a sonda que passou a desfaz.
+                    if ($campaign->status === Campaign::STATUS_PAUSADA && $this->pausadaPeloDisjuntor($campaign)) {
+                        $campaign->forceFill(['status' => Campaign::STATUS_EM_ANDAMENTO, 'pausada_motivo' => null])->save();
+                        $campaign->registrarEvento('retomada', ['motivo' => 'a sonda do remetente passou', 'automatico' => true], null);
+                    }
+
                     $this->discord->enviar('Remetente voltou a enviar', sprintf('A sonda do remetente "%s" passou; a campanha "%s" segue na próxima rodada.', $sender->nome, $campaign->nome), DiscordNotifier::COR_SUCESSO);
                     $resultado['parou'] = 'sonda_passou';
                     break;
@@ -336,7 +344,7 @@ final class ExecutorDeCampanha
                     break;
                 }
 
-                sleep(min(10, 2 ** $transitoriasSeguidas));
+                sleep(min((int) config('disparo.lote.backoff_maximo_segundos', 10), 2 ** $transitoriasSeguidas));
 
                 continue;
             }
@@ -420,6 +428,14 @@ final class ExecutorDeCampanha
         return $cache;
     }
 
+    /** A última pausa desta campanha foi do disjuntor (evento automático), não de um usuário. */
+    private function pausadaPeloDisjuntor(Campaign $campaign): bool
+    {
+        $ultima = $campaign->events()->whereIn('evento', ['pausada', 'disjuntor', 'retomada'])->first();
+
+        return $ultima !== null && $ultima->evento !== 'retomada' && (bool) (($ultima->detalhes ?? [])['automatico'] ?? false);
+    }
+
     private function pular(CampaignRecipient $destinatario, string $motivo): void
     {
         $destinatario->forceFill(['status' => CampaignRecipient::STATUS_PULADO, 'motivo' => mb_substr($motivo, 0, 100), 'proxima_tentativa_em' => null])->save();
@@ -449,50 +465,19 @@ final class ExecutorDeCampanha
         ])->save();
     }
 
+    /** Conta impedida: o {@see Disjuntor} pausa o remetente (com sonda) e esta campanha. */
     private function impedir(Campaign $campaign, Sender $sender, WhatsAppException $excecao): void
     {
-        $motivo = mb_substr('Conta impedida: '.$excecao->getMessage(), 0, 500);
-        $sender->impedir($motivo);
-        $this->pausarCampanha($campaign, $motivo, 'disjuntor');
-
-        Log::warning('Disjuntor (conta impedida)', ['sender_id' => $sender->id, 'campaign_id' => $campaign->id, 'codigo' => $excecao->codigo]);
-
-        $this->discord->enviar(
-            'Disjuntor: conta impedida',
-            sprintf('O remetente "%s" recusou um envio da campanha "%s" por motivo que vale para a conta inteira. Campanha e remetente pausados; a próxima sonda (1 envio) sai em %d min.', $sender->nome, $campaign->nome, (int) $sender->sonda_intervalo_minutos),
-            DiscordNotifier::COR_PERIGO,
-            [['name' => 'Motivo', 'value' => mb_substr($excecao->getMessage(), 0, 900)]],
-            true,
-        );
+        $this->disjuntor->impedir($sender, $excecao, $campaign);
     }
 
-    /** Bloqueio por qualidade: pausa sem sonda e cancela as campanhas MARKETING em andamento do remetente. */
+    /**
+     * Bloqueio por qualidade: o {@see Disjuntor} pausa o remetente sem sonda e cancela as campanhas
+     * MARKETING em andamento dele. Público porque a sincronização de qualidade (RED) usa o mesmo caminho.
+     */
     public function bloquearPorQualidade(Campaign $campaign, Sender $sender, string $motivo, string|int|null $codigo = null): void
     {
-        $sender->bloquearPorQualidade($motivo);
-
-        $canceladas = [];
-
-        foreach ($sender->campaigns()->whereIn('status', [Campaign::STATUS_EM_ANDAMENTO, Campaign::STATUS_PAUSADA, Campaign::STATUS_APROVADA])->get() as $outra) {
-            $template = $this->template($outra);
-            $ehMarketing = $template !== null && Guardas::marketing($template);
-
-            if ($outra->is($campaign) || $ehMarketing) {
-                $outra->forceFill(['status' => $ehMarketing ? Campaign::STATUS_CANCELADA : Campaign::STATUS_PAUSADA, 'pausada_motivo' => mb_substr($motivo, 0, 500)])->save();
-                $outra->registrarEvento($ehMarketing ? 'cancelada' : 'pausada', ['motivo' => mb_substr($motivo, 0, 500), 'automatico' => true, 'bloqueio_qualidade' => true, 'codigo' => $codigo], null);
-                $canceladas[] = $outra->nome;
-            }
-        }
-
-        Log::warning('Disjuntor (bloqueio por qualidade)', ['sender_id' => $sender->id, 'campaign_id' => $campaign->id, 'codigo' => $codigo]);
-
-        $this->discord->enviar(
-            'Bloqueio por qualidade: remetente travado',
-            sprintf('A Meta sinalizou o remetente "%s". Sem sonda automática: alguém com "manage senders" precisa religar depois de conferir a qualidade no WhatsApp Manager. Campanhas afetadas: %s.', $sender->nome, implode(', ', $canceladas) ?: $campaign->nome),
-            DiscordNotifier::COR_PERIGO,
-            [['name' => 'Motivo', 'value' => mb_substr($motivo, 0, 900)]],
-            true,
-        );
+        $this->disjuntor->bloquearPorQualidade($sender, $motivo, $codigo, $campaign);
     }
 
     /** @param  array{motivo: ?string, metricas: array<string, mixed>}  $avaliacao */

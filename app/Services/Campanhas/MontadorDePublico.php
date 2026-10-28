@@ -14,10 +14,10 @@ use App\Models\Sender;
 use App\Models\Suppression;
 use App\Services\Envio\Guardas;
 use App\Services\Envio\MontadorDeComponentes;
+use App\Services\Segmentos\ConsultaDeSegmento;
 use App\Services\WhatsApp\WhatsAppException;
 use App\Support\Variaveis;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Do público da campanha (listas + segmento - exclusões) aos destinatários, com o motivo de quem fica de
@@ -147,7 +147,7 @@ final class MontadorDePublico
         // Sem segmento, a base entra inteira: quem está em opt-out ou inválido aparece na prévia como
         // excluído, com o motivo - o operador vê quanto da base já pediu para parar.
         $query = $segmento !== null
-            ? \App\Services\Segmentos\ConsultaDeSegmento::doSegmento($segmento)
+            ? ConsultaDeSegmento::doSegmento($segmento)
             : Contact::query();
 
         if ($listas !== []) {
@@ -204,6 +204,9 @@ final class MontadorDePublico
             ->with(['lists:id', 'tags:id'])
             ->orderBy('contacts.id')
             ->chunkById(self::LOTE, function ($contatos) use ($cada, $sender, $template, $contexto, $bloqueados, &$vistos): void {
+                // Conversa aberta e frequência do lote inteiro em três consultas, não três por contato.
+                $historico = Guardas::historicoPorTelefone($sender, $contatos->pluck('telefone')->all());
+
                 foreach ($contatos as $contato) {
                     $variaveis = [];
                     $motivo = null;
@@ -215,7 +218,7 @@ final class MontadorDePublico
                         $motivo = Guardas::SUPRIMIDO;
                     } else {
                         $vistos[$contato->telefone] = true;
-                        $motivo = Guardas::motivoDoContato($contato, $sender, $template, $contexto);
+                        $motivo = Guardas::motivoDoContato($contato, $sender, $template, $contexto, $historico[$contato->telefone] ?? Guardas::HISTORICO_VAZIO);
                     }
 
                     if ($motivo === null && $template !== null) {

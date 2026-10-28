@@ -73,7 +73,7 @@ class WhatsappMessage extends Model
     protected $fillable = [
         'sender_id', 'contact_id', 'telefone', 'direcao', 'wamid', 'external_key', 'tipo', 'template_nome', 'conteudo', 'status',
         'codigo_erro', 'erro', 'origem', 'campaign_recipient_id', 'journey_enrollment_id', 'context_wamid',
-        'kapso_conversation_id', 'enviado_em', 'entregue_em', 'lido_em', 'payload', 'tratada_em', 'tratada_por',
+        'kapso_conversation_id', 'enviado_em', 'entregue_em', 'lido_em', 'payload', 'tratada_em', 'tratada_por', 'user_id',
     ];
 
     protected function casts(): array
@@ -93,7 +93,7 @@ class WhatsappMessage extends Model
     }
 
     /** A Meta só aceita texto livre até 24 h depois da última mensagem do cliente. */
-    public static function janelaAbertaAte(?\Carbon\CarbonInterface $ultimaResposta): ?\Carbon\CarbonInterface
+    public static function janelaAbertaAte(?CarbonInterface $ultimaResposta): ?CarbonInterface
     {
         if ($ultimaResposta === null) {
             return null;
