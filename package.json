@@ -1,31 +1,17 @@
 {
-  "name": "disparo-comercial-unicopag",
-  "version": "1.0.0",
-  "description": "Disparo comercial via WhatsApp Business Cloud API (Meta) exposto como servidor MCP e CLI",
-  "type": "module",
-  "private": true,
-  "bin": {
-    "unicopag-whatsapp-mcp": "dist/mcp-server.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "mcp": "node dist/mcp-server.js",
-    "disparo": "node dist/cli.js",
-    "registrar": "node dist/registrar.js",
-    "test": "node --test dist/*.test.js"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "csv-parse": "^5.6.0",
-    "dotenv": "^16.4.7",
-    "zod": "^4.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
-  }
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "axios": "^1.11.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^2.0.0",
+        "tailwindcss": "^4.0.0",
+        "vite": "^7.0.7"
+    }
 }

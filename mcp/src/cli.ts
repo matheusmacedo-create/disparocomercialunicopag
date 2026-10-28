@@ -53,6 +53,11 @@ const client = new WhatsAppClient(config);
 const contatos = lerContatosCsv(resolve(values.csv));
 const dryRun = !values.enviar;
 
+if (!dryRun && process.env.MCP_ENVIO_REAL !== "true") {
+  console.error("Envio real desligado nesta CLI: use a plataforma de disparos (painel /admin), que aplica supressões, teto e aprovação. Para emergência, defina MCP_ENVIO_REAL=true.");
+  process.exit(1);
+}
+
 if (!dryRun) {
   const info = await client.infoNumero();
   console.log(`Número: ${info.display_phone_number} (${info.verified_name}) — qualidade ${info.quality_rating}, limite ${info.messaging_limit_tier ?? "?"}`);

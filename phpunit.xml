@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_URL" value="https://disparo.test"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="APP_TIMEZONE" value="America/Sao_Paulo"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="DISPARO_ENVIO_HABILITADO" value="true"/>
+        <env name="DISPARO_HASH_PEPPER" value="pepper-de-teste-nao-usar-em-producao"/>
+        <env name="KAPSO_BASE_URL" value="https://api.kapso.test"/>
+        <env name="KAPSO_API_KEY" value=""/>
+        <env name="META_WHATSAPP_TOKEN" value=""/>
+        <env name="META_APP_SECRET" value="segredo-meta-de-teste"/>
+        <env name="META_WEBHOOK_VERIFY_TOKEN" value="verify-de-teste"/>
+        <env name="DISCORD_DISPARO_WEBHOOK_URL" value=""/>
+        <env name="API_KEY" value=""/>
+        <env name="UNICOPAG_API_BASE_URL" value="https://unico-api.test"/>
+        <env name="UNICOPAG_API_KEY" value=""/>
+    </php>
+</phpunit>

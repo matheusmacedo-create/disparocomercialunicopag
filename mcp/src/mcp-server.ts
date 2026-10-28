@@ -19,6 +19,13 @@ import {
 const config = carregarConfig();
 const client = new WhatsAppClient(config);
 
+// A plataforma Laravel (raiz do repositório) é o canal de envio: aplica supressões, teto, janela,
+// aprovação e trilha. Este MCP fala direto com a Meta e NÃO vê nada disso, então o envio real fica
+// desligado por padrão - só com MCP_ENVIO_REAL=true no ambiente, para emergência conhecida.
+const ENVIO_REAL_PERMITIDO = process.env.MCP_ENVIO_REAL === "true";
+const envioRealBloqueado = () =>
+  falha(new Error("Envio real desligado neste MCP: use a plataforma de disparos (painel /admin). Para emergência, defina MCP_ENVIO_REAL=true."));
+
 const server = new McpServer({ name: "unicopag-whatsapp", version: "1.0.0" });
 
 const json = (dados: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(dados, null, 2) }] });
@@ -143,6 +150,7 @@ server.registerTool(
   },
   async (args) => {
     try {
+      if (!ENVIO_REAL_PERMITIDO) return envioRealBloqueado();
       const telefone = normalizarTelefone(args.telefone, config.ddiPadrao);
       if (!telefone) throw new Error(`Telefone inválido: ${args.telefone}`);
       const modelo = paraModelo(args);
@@ -168,6 +176,7 @@ server.registerTool(
   },
   async ({ telefone, texto, preview_url }) => {
     try {
+      if (!ENVIO_REAL_PERMITIDO) return envioRealBloqueado();
       const numero = normalizarTelefone(telefone, config.ddiPadrao);
       if (!numero) throw new Error(`Telefone inválido: ${telefone}`);
       return json(await client.enviarTexto(numero, texto, preview_url));
@@ -207,6 +216,7 @@ server.registerTool(
   },
   async (args) => {
     try {
+      if (!args.dry_run && !ENVIO_REAL_PERMITIDO) return envioRealBloqueado();
       let contatos: Contato[];
       if (args.arquivo_csv) contatos = lerContatosCsv(resolve(args.arquivo_csv));
       else if (args.contatos?.length) contatos = args.contatos;
