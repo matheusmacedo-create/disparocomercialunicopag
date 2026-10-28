@@ -6,6 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { carregarConfig } from "./config.js";
 import { WhatsAppClient } from "./whatsapp.js";
+import { carregarConfigPlataforma, PlataformaClient } from "./plataforma.js";
 import { normalizarTelefone } from "./phone.js";
 import {
   executarDisparo,
@@ -18,6 +19,7 @@ import {
 
 const config = carregarConfig();
 const client = new WhatsAppClient(config);
+const plataforma = new PlataformaClient(carregarConfigPlataforma());
 
 // A plataforma Laravel (raiz do repositório) é o canal de envio: aplica supressões, teto, janela,
 // aprovação e trilha. Este MCP fala direto com a Meta e NÃO vê nada disso, então o envio real fica
@@ -286,6 +288,156 @@ server.registerTool(
     if (!job) return falha(new Error(`Job ${job_id} não encontrado`));
     job.controle.abort();
     return json({ job_id, cancelamento: "solicitado" });
+  },
+);
+
+
+// ---------------------------------------------------------------------------------------------
+// Plataforma de disparos (/api/v1): é por aqui que se gere e nutre a base. Nada de envio direto.
+// ---------------------------------------------------------------------------------------------
+
+server.registerTool(
+  "disparo_saude",
+  {
+    title: "Saúde da plataforma de disparos",
+    description: "Confere a API da plataforma (/api/v1/health): interruptor de envio, remetentes e campanhas em andamento.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      return json(await plataforma.saude());
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_consultar_contato",
+  {
+    title: "Consultar contato na plataforma",
+    description: "Situação de um telefone na base: status (ativo, pediu para parar, sem WhatsApp), consentimento, último envio e última resposta. Telefone mascarado.",
+    inputSchema: { telefone: z.string().describe("Telefone em qualquer formato (DDI 55 é aplicado se faltar)") },
+  },
+  async ({ telefone }) => {
+    try {
+      const numero = normalizarTelefone(telefone, config.ddiPadrao);
+      if (!numero) throw new Error(`Telefone inválido: ${telefone}`);
+      return json(await plataforma.consultarContato(numero));
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_bloquear_telefone",
+  {
+    title: "Bloquear telefone (opt-out)",
+    description:
+      "Registra na plataforma que o telefone NÃO deve mais receber mensagens: escopo 'tudo' (para sempre, em todos os remetentes) ou 'marketing' (só ofertas). Use quando o cliente pediu para parar por outro canal.",
+    inputSchema: {
+      telefone: z.string(),
+      escopo: z.enum(["tudo", "marketing"]).default("tudo"),
+      motivo: z.string().min(3).max(50).default("manual").describe("Ex.: manual, importacao"),
+      detalhes: z.string().max(500).optional().describe("De onde veio o pedido (sem dados pessoais de terceiros)"),
+    },
+  },
+  async ({ telefone, escopo, motivo, detalhes }) => {
+    try {
+      const numero = normalizarTelefone(telefone, config.ddiPadrao);
+      if (!numero) throw new Error(`Telefone inválido: ${telefone}`);
+      return json(await plataforma.bloquear(numero, escopo, motivo, detalhes));
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_listar_bloqueios",
+  {
+    title: "Listar bloqueios",
+    description: "Supressões (pedidos para parar, denúncias, preferência de marketing) registradas na plataforma desde uma data.",
+    inputSchema: { desde: z.string().optional().describe("ISO 8601, ex.: 2026-10-01T00:00:00Z") },
+  },
+  async ({ desde }) => {
+    try {
+      return json(await plataforma.listarBloqueios(desde));
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_listar_templates_remetente",
+  {
+    title: "Templates de um remetente da plataforma",
+    description: "Templates (cache da Meta) de um remetente cadastrado na plataforma, com categoria e status.",
+    inputSchema: { remetente_id: z.number().int().positive() },
+  },
+  async ({ remetente_id }) => {
+    try {
+      return json(await plataforma.listarTemplates(remetente_id));
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_criar_campanha_rascunho",
+  {
+    title: "Criar campanha em rascunho",
+    description:
+      "Cria uma campanha em RASCUNHO na plataforma. Nada sai daqui: a prévia, a aprovação por outra pessoa e o início acontecem no painel (/admin). " +
+      "Objetivo: recuperar | ativar | ofertar | avisar. Público: ids de bases, segmento ou campanha anterior.",
+    inputSchema: {
+      nome: z.string().min(3).max(120),
+      remetente_id: z.number().int().positive(),
+      objetivo: z.enum(["recuperar", "ativar", "ofertar", "avisar"]).default("recuperar"),
+      template: z.string().describe("Nome do template aprovado na Meta"),
+      idioma: z.string().default("pt_BR"),
+      variaveis_corpo: z.array(z.string()).optional().describe('Valores de {{1}}, {{2}}... como "{{primeiro_nome|tudo bem}}"'),
+      listas: z.array(z.number().int()).optional().describe("Ids das bases"),
+      segmento_id: z.number().int().optional(),
+      observacoes: z.string().max(1000).optional(),
+    },
+  },
+  async (args) => {
+    try {
+      return json(
+        await plataforma.criarCampanhaRascunho({
+          nome: args.nome,
+          sender_id: args.remetente_id,
+          objetivo: args.objetivo,
+          template_nome: args.template,
+          template_idioma: args.idioma,
+          variaveis: args.variaveis_corpo ? { corpo: args.variaveis_corpo } : undefined,
+          publico: { listas: args.listas ?? [], segment_id: args.segmento_id },
+          observacoes: args.observacoes,
+        }),
+      );
+    } catch (e) {
+      return falha(e);
+    }
+  },
+);
+
+server.registerTool(
+  "disparo_status_campanha",
+  {
+    title: "Status de uma campanha",
+    description: "Situação, totais (enviados, entregues, lidos, respondidos, falhas, pulados) e prévia de uma campanha da plataforma.",
+    inputSchema: { campanha_id: z.number().int().positive() },
+  },
+  async ({ campanha_id }) => {
+    try {
+      return json(await plataforma.statusCampanha(campanha_id));
+    } catch (e) {
+      return falha(e);
+    }
   },
 );
 

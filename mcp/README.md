@@ -88,14 +88,20 @@ claude mcp add unicopag-whatsapp -- node /caminho/para/mcp/dist/mcp-server.js
 
 | Ferramenta | O que faz |
 |---|---|
-| `whatsapp_info_numero` | Nome verificado, qualidade (GREEN/YELLOW/RED) e limite diário |
-| `whatsapp_registrar_numero` | Solicita código, verifica e registra o número na Cloud API |
-| `whatsapp_listar_templates` | Templates da WABA, com filtro por status |
-| `whatsapp_enviar_template` | Envia um template para 1 número (teste) |
-| `whatsapp_enviar_texto` | Texto livre (só entrega dentro da janela de 24h) |
-| `whatsapp_disparo_em_massa` | Disparo em massa a partir de CSV/lista (roda em 2º plano, **simulação por padrão**) |
-| `whatsapp_status_disparo` | Progresso do disparo |
-| `whatsapp_cancelar_disparo` | Interrompe um disparo em andamento |
+| `disparo_saude` | Saúde da plataforma (`/api/v1/health`): interruptor de envio, remetentes, campanhas |
+| `disparo_consultar_contato` | Situação de um telefone na base (status, consentimento, último envio/resposta), mascarado |
+| `disparo_bloquear_telefone` | Opt-out na plataforma: escopo `tudo` (para sempre) ou `marketing` |
+| `disparo_listar_bloqueios` | Supressões desde uma data (o mesmo que o KYC lê) |
+| `disparo_listar_templates_remetente` | Templates de um remetente cadastrado na plataforma |
+| `disparo_criar_campanha_rascunho` | Cria campanha em rascunho; prévia, aprovação e início só no painel |
+| `disparo_status_campanha` | Totais e situação de uma campanha |
+| `whatsapp_info_numero` | (Meta direto) Nome verificado, qualidade e limite diário do número |
+| `whatsapp_registrar_numero` | (Meta direto) Registra o número na Cloud API |
+| `whatsapp_listar_templates` | (Meta direto) Templates da WABA |
+| `whatsapp_enviar_template` | (Meta direto) **Desligado** sem `MCP_ENVIO_REAL=true` |
+| `whatsapp_enviar_texto` | (Meta direto) **Desligado** sem `MCP_ENVIO_REAL=true` |
+| `whatsapp_disparo_em_massa` | (Meta direto) Só simulação sem `MCP_ENVIO_REAL=true` |
+| `whatsapp_status_disparo` / `whatsapp_cancelar_disparo` | Progresso e cancelamento da simulação |
 
 ## 4. Disparo pela linha de comando
 
