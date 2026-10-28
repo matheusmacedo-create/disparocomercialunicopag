@@ -129,4 +129,22 @@ class AnonimizarContatoTest extends TestCase
         $this->assertSame('meta_marketing_stopped', $dados['bloqueios'][0]['motivo']);
         $this->assertSame('bloqueado', $dados['trilha'][0]['evento']);
     }
+
+    public function test_anonimizar_tira_o_contato_da_amostra_da_previa_das_campanhas(): void
+    {
+        $contato = Contact::factory()->create(['nome' => 'Ana Prevista']);
+        $outro = Contact::factory()->create(['nome' => 'Bia Fica']);
+        $campanha = Campaign::factory()->create();
+        $campanha->forceFill(['simulacao' => ['elegiveis' => 2, 'amostra' => [
+            ['contato' => $contato->rotulo(), 'variaveis' => 'primeiro_nome=Ana'],
+            ['contato' => $outro->rotulo(), 'variaveis' => 'primeiro_nome=Bia'],
+        ]]])->save();
+
+        app(AnonimizarContato::class)->pelaRotina($contato, 'teste');
+
+        $amostra = $campanha->fresh()->simulacao['amostra'];
+        $this->assertCount(1, $amostra);
+        $this->assertSame('Bia Fica', $amostra[0]['contato']);
+        $this->assertStringNotContainsString('Ana', json_encode($campanha->fresh()->simulacao));
+    }
 }

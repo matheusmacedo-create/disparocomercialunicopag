@@ -197,6 +197,8 @@ return [
         // Lead de origem externa sem nenhuma interação (resposta, cadastro) por N meses é anonimizado. 0 = nunca.
         'lead_sem_interacao_meses' => (int) env('DISPARO_RETENCAO_LEAD_MESES', 12),
         'failed_jobs_dias' => 7,
+        // CSV exportado da campanha pelo painel (storage/app/private/exportacoes): fica só para o download.
+        'exportacoes_dias' => 7,
     ],
 
     // Pedido do titular (Art. 18): prazo para atender, em dias.

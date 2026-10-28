@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Contatos;
 
+use App\Models\Campaign;
 use App\Models\CampaignRecipient;
 use App\Models\Contact;
 use App\Models\ContactEvent;
@@ -65,6 +66,7 @@ final class AnonimizarContato
 
         DB::transaction(function () use ($contato, $userId, $motivo): void {
             $telefone = $contato->telefone;
+            $this->limparAmostraDasPrevias($contato);
             $hash = Telefone::hash($telefone);
             $marcador = Telefone::anonimo($telefone);
             $formas = Telefone::formas($telefone);
@@ -125,5 +127,21 @@ final class AnonimizarContato
 
             ContactEvent::registrar($hash, 'anonimizado', ['motivo' => $motivo], $userId, $contato->id);
         });
+    }
+
+    /** A prévia gravada na campanha guarda nome e variáveis de até 5 contatos: tira as linhas deste. */
+    private function limparAmostraDasPrevias(Contact $contato): void
+    {
+        $rotulo = $contato->rotulo();
+
+        foreach (Campaign::query()->whereNotNull('simulacao')->get() as $campanha) {
+            $simulacao = (array) $campanha->simulacao;
+            $amostra = array_values(array_filter((array) ($simulacao['amostra'] ?? []), fn (mixed $linha): bool => ! is_array($linha) || (string) ($linha['contato'] ?? '') !== $rotulo));
+
+            if (count($amostra) !== count((array) ($simulacao['amostra'] ?? []))) {
+                $simulacao['amostra'] = $amostra;
+                $campanha->forceFill(['simulacao' => $simulacao])->save();
+            }
+        }
     }
 }

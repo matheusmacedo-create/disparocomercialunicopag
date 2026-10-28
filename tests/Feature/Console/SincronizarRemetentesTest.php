@@ -88,4 +88,17 @@ class SincronizarRemetentesTest extends TestCase
         $this->assertNotNull($comCampanha->fresh()->sincronizado_em);
         $this->assertNull($semCampanha->fresh()->sincronizado_em);
     }
+
+    public function test_com_o_argumento_sincroniza_so_aquele_remetente(): void
+    {
+        $this->fakeNumero('GREEN');
+        $um = Sender::factory()->create(['qualidade' => Sender::QUALIDADE_UNKNOWN]);
+        $outro = Sender::factory()->create(['qualidade' => Sender::QUALIDADE_UNKNOWN]);
+
+        $this->artisan('disparo:sincronizar-remetentes '.$um->id)->assertSuccessful();
+
+        $this->assertSame(Sender::QUALIDADE_GREEN, $um->fresh()->qualidade);
+        $this->assertSame(Sender::QUALIDADE_UNKNOWN, $outro->fresh()->qualidade);
+        $this->artisan('disparo:sincronizar-remetentes nao-existe')->expectsOutputToContain('não encontrado')->assertFailed();
+    }
 }

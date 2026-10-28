@@ -41,7 +41,7 @@ final class ExecutarCampanhasCommand extends Command
             $this->warn('SIMULAÇÃO (DISPARO_ENVIO_HABILITADO=false): as rodadas marcam `simulado`, nada sai.');
         }
 
-        $campanhas = $this->campanhasProntas();
+        $campanhas = $this->campanhasProntas($executor);
 
         if ($campanhas->isEmpty()) {
             $this->info($this->option('campanha') ? 'A campanha pedida não está pronta para rodar (precisa estar em andamento, ou aprovada com o horário vencido).' : 'Nenhuma campanha pronta para rodar.');
@@ -94,20 +94,25 @@ final class ExecutarCampanhasCommand extends Command
         return self::SUCCESS;
     }
 
-    /** @return Collection<int, Campaign> */
-    private function campanhasProntas(): Collection
+    /**
+     * Em andamento, aprovada com o horário vencido e - para a sonda sair - pausada pelo disjuntor (conta
+     * impedida) com a sonda do remetente devida: o executor manda 1 e, se passa, retoma a campanha.
+     *
+     * @return Collection<int, Campaign>
+     */
+    private function campanhasProntas(ExecutorDeCampanha $executor): Collection
     {
         $id = $this->option('campanha');
 
         return Campaign::query()
-            ->whereIn('status', [Campaign::STATUS_EM_ANDAMENTO, Campaign::STATUS_APROVADA])
+            ->whereIn('status', [Campaign::STATUS_EM_ANDAMENTO, Campaign::STATUS_APROVADA, Campaign::STATUS_PAUSADA])
             ->when(filled($id), fn ($q) => $q->whereKey((int) $id))
             ->orderBy('prioridade')
             ->orderBy('agendada_para')
             ->orderBy('id')
             ->with('sender')
             ->get()
-            ->filter(fn (Campaign $c): bool => $c->sender !== null && $c->prontaParaRodar())
+            ->filter(fn (Campaign $c): bool => $c->sender !== null && ($c->prontaParaRodar() || ($c->status === Campaign::STATUS_PAUSADA && $c->sender->sondaDevida() && $executor->pausadaPeloDisjuntor($c))))
             ->values();
     }
 

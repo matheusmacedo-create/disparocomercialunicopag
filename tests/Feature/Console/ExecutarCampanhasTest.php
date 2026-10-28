@@ -10,6 +10,7 @@ use App\Models\Contact;
 use App\Models\MessageTemplate;
 use App\Models\Sender;
 use App\Models\WhatsappMessage;
+use App\Support\Permissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -112,5 +113,41 @@ class ExecutarCampanhasTest extends TestCase
 
         Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/messages'));
         $this->assertSame(2, $campanha->recipients()->where('status', CampaignRecipient::STATUS_SIMULADO)->count());
+    }
+
+    public function test_campanha_pausada_pelo_disjuntor_entra_na_rodada_quando_a_sonda_e_devida_e_e_retomada(): void
+    {
+        $campanha = $this->campanhaComDestinatarios(2);
+        $this->sender->impedir('token inválido');
+        $campanha->forceFill(['status' => Campaign::STATUS_PAUSADA, 'pausada_motivo' => 'conta impedida'])->save();
+        $campanha->registrarEvento('pausada', ['motivo' => 'conta impedida', 'automatico' => true], null);
+
+        // Sonda ainda não devida: a campanha pausada fica de fora.
+        $this->artisan('disparo:executar-campanhas')->assertSuccessful();
+        $this->assertSame(Campaign::STATUS_PAUSADA, $campanha->fresh()->status);
+        $this->assertSame(0, WhatsappMessage::query()->count());
+
+        $this->travelTo(now()->addMinutes(130));
+        $this->artisan('disparo:executar-campanhas')->assertSuccessful();
+
+        $campanha->refresh();
+        $this->assertSame(Campaign::STATUS_EM_ANDAMENTO, $campanha->status, 'a sonda passou: a campanha pausada pelo disjuntor volta');
+        $this->assertNull($this->sender->fresh()->pausado_em);
+        $this->assertSame(1, WhatsappMessage::query()->count(), 'a sonda manda um único template');
+        $this->assertTrue($campanha->events()->where('evento', 'retomada')->exists());
+    }
+
+    public function test_campanha_pausada_por_gente_nao_entra_na_rodada_mesmo_com_sonda_devida(): void
+    {
+        $campanha = $this->campanhaComDestinatarios(1);
+        $this->sender->impedir('token inválido');
+        $campanha->forceFill(['status' => Campaign::STATUS_PAUSADA])->save();
+        $campanha->registrarEvento('pausada', ['motivo' => 'operador pausou'], $this->usuario(Permissions::ROLE_ADMIN)->id);
+
+        $this->travelTo(now()->addMinutes(130));
+        $this->artisan('disparo:executar-campanhas')->assertSuccessful();
+
+        $this->assertSame(Campaign::STATUS_PAUSADA, $campanha->fresh()->status);
+        $this->assertSame(0, WhatsappMessage::query()->count());
     }
 }

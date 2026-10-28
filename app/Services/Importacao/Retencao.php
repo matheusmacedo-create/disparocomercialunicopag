@@ -43,6 +43,7 @@ final class Retencao
             'failed_jobs_apagados' => 0,
             'webhook_calls_apagados' => 0,
             'arquivos_apagados' => 0,
+            'exportacoes_apagadas' => 0,
         ];
 
         $dias = (int) config('disparo.retencao.conteudo_dias', 180);
@@ -104,6 +105,16 @@ final class Retencao
             Storage::disk('local')->delete((string) $importacao->arquivo);
             $importacao->forceFill(['arquivo' => null])->save();
             $contagem['arquivos_apagados']++;
+        }
+
+        // Exportações de campanha (CSV com telefone, às vezes em claro) mais velhas que o prazo.
+        $diasExportacoes = max(1, (int) config('disparo.retencao.exportacoes_dias', 7));
+
+        foreach (Storage::disk('local')->files('exportacoes') as $arquivo) {
+            if (Storage::disk('local')->lastModified($arquivo) < now()->subDays($diasExportacoes)->getTimestamp()) {
+                Storage::disk('local')->delete($arquivo);
+                $contagem['exportacoes_apagadas']++;
+            }
         }
 
         return $contagem;

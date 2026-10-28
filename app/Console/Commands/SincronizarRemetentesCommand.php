@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\AchaRemetente;
 use App\Models\Campaign;
 use App\Models\MessageTemplate;
 use App\Models\Sender;
@@ -27,14 +28,28 @@ use Throwable;
  */
 final class SincronizarRemetentesCommand extends Command
 {
-    protected $signature = 'disparo:sincronizar-remetentes {--rapido : Só remetentes com campanha em andamento}';
+    use AchaRemetente;
+
+    protected $signature = 'disparo:sincronizar-remetentes {sender? : Só este remetente (id, phone_number_id ou nome)} {--rapido : Só remetentes com campanha em andamento}';
 
     protected $description = 'Sincroniza qualidade, tier, status e saúde dos remetentes com a Meta e reage à mudança de qualidade';
 
     public function handle(WhatsAppClientFactory $clientes, DiscordNotifier $discord): int
     {
+        $apenas = null;
+
+        if (filled($this->argument('sender'))) {
+            $apenas = $this->acharRemetente((string) $this->argument('sender'));
+
+            if ($apenas === null) {
+                $this->error('Remetente não encontrado.');
+
+                return self::FAILURE;
+            }
+        }
+
         $remetentes = Sender::query()
-            ->where('ativo', true)
+            ->when($apenas !== null, fn ($q) => $q->whereKey($apenas->id), fn ($q) => $q->where('ativo', true))
             ->when($this->option('rapido'), fn ($q) => $q->whereHas('campaigns', fn ($q) => $q->where('status', Campaign::STATUS_EM_ANDAMENTO)))
             ->orderBy('id')
             ->get();

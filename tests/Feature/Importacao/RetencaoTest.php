@@ -54,7 +54,7 @@ class RetencaoTest extends TestCase
 
         $contagem = app(Retencao::class)->executar();
 
-        $this->assertSame(['mensagens_sem_conteudo' => 1, 'destinatarios_sem_variaveis' => 1, 'leads_anonimizados' => 1, 'failed_jobs_apagados' => 1, 'webhook_calls_apagados' => 1, 'arquivos_apagados' => 1], $contagem);
+        $this->assertSame(['mensagens_sem_conteudo' => 1, 'destinatarios_sem_variaveis' => 1, 'leads_anonimizados' => 1, 'failed_jobs_apagados' => 1, 'webhook_calls_apagados' => 1, 'arquivos_apagados' => 1, 'exportacoes_apagadas' => 0], $contagem);
         $this->assertNull($velha->refresh()->conteudo);
         $this->assertNull($velha->payload);
         $this->assertSame('oi', $nova->refresh()->conteudo);
@@ -72,5 +72,19 @@ class RetencaoTest extends TestCase
         // Com 0 meses, lead nenhum é anonimizado.
         config(['disparo.retencao.lead_sem_interacao_meses' => 0]);
         $this->assertSame(0, app(Retencao::class)->executar()['leads_anonimizados']);
+    }
+
+    public function test_apaga_exportacoes_de_campanha_mais_velhas_que_o_prazo(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('exportacoes/campanha-1-velha.csv', 'telefone;status');
+        Storage::disk('local')->put('exportacoes/campanha-2-nova.csv', 'telefone;status');
+        touch(Storage::disk('local')->path('exportacoes/campanha-1-velha.csv'), now()->subDays(10)->getTimestamp());
+
+        $resultado = app(Retencao::class)->executar();
+
+        $this->assertSame(1, $resultado['exportacoes_apagadas']);
+        Storage::disk('local')->assertMissing('exportacoes/campanha-1-velha.csv');
+        Storage::disk('local')->assertExists('exportacoes/campanha-2-nova.csv');
     }
 }

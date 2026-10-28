@@ -429,7 +429,7 @@ final class ExecutorDeCampanha
     }
 
     /** A última pausa desta campanha foi do disjuntor (evento automático), não de um usuário. */
-    private function pausadaPeloDisjuntor(Campaign $campaign): bool
+    public function pausadaPeloDisjuntor(Campaign $campaign): bool
     {
         $ultima = $campaign->events()->whereIn('evento', ['pausada', 'disjuntor', 'retomada'])->first();
 
