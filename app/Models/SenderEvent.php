@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\Ator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -44,7 +45,7 @@ class SenderEvent extends Model
         return self::query()->create([
             'sender_id' => $sender->id,
             'user_id' => $userId,
-            'ator' => \App\Support\Ator::atual($userId),
+            'ator' => Ator::atual($userId),
             'evento' => mb_substr($evento, 0, 40),
             'detalhes' => $detalhes,
             'created_at' => now(),

@@ -9,6 +9,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Remetente: um número de WhatsApp com provedor, credencial e política própria (KB 4.1, 5).
@@ -84,7 +85,7 @@ class Sender extends Model
     protected static function booted(): void
     {
         static::creating(function (self $sender): void {
-            $sender->webhook_key ??= \Illuminate\Support\Str::random(48);
+            $sender->webhook_key ??= Str::random(48);
             // Teto que nenhum painel ultrapassa (o incidente foi 650 num dia).
             $sender->teto_diario = min((int) $sender->teto_diario, (int) config('disparo.teto_maximo_absoluto', 1000));
         });
@@ -339,8 +340,8 @@ class Sender extends Model
     /** Gera (ou troca) o segredo do webhook; quem chama registra na Kapso e na trilha. */
     public function rotacionarSegredoDoWebhook(): string
     {
-        $segredo = \Illuminate\Support\Str::random(48);
-        $this->forceFill(['webhook_secret' => $segredo, 'webhook_key' => $this->webhook_key ?: \Illuminate\Support\Str::random(48)])->save();
+        $segredo = Str::random(48);
+        $this->forceFill(['webhook_secret' => $segredo, 'webhook_key' => $this->webhook_key ?: Str::random(48)])->save();
 
         return $segredo;
     }

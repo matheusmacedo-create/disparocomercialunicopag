@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\Reguas\FluxoDeRegua;
+use App\Support\Ator;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,7 +46,7 @@ class Journey extends Model
 
     public const STATUS_PAUSADA = 'pausada';
 
-    /** Só o formulário: estado, aprovação e `ativa` mudam pelo {@see \App\Services\Reguas\FluxoDeRegua}. */
+    /** Só o formulário: estado, aprovação e `ativa` mudam pelo {@see FluxoDeRegua}. */
     protected $fillable = ['nome', 'descricao', 'sender_id', 'objetivo', 'gatilho', 'gatilho_ref', 'sair_ao_responder', 'sair_ao_converter', 'reinscrever_apos_dias', 'ignora_conversa_aberta', 'intervalo_minimo_horas', 'max_por_dia'];
 
     protected function casts(): array
@@ -85,7 +87,7 @@ class Journey extends Model
             'evento' => $evento,
             'detalhes' => $detalhes,
             'user_id' => $userId,
-            'ator' => \App\Support\Ator::atual($userId),
+            'ator' => Ator::atual($userId),
             'created_at' => now(),
         ]);
     }

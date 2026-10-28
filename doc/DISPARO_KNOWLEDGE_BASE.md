@@ -473,6 +473,61 @@ escondida; `status` das campanhas e réguas não é campo de formulário.
 - Mapear `[prod]` número → WABA → portfólio dos três números (o +1 203 do KYC pode estar no portfólio da
   Kapso).
 
+### 8.1 Como os comandos se comportam `[código]` (frente A, 28/10/2026)
+
+- `disparo:executar-campanhas [--campanha=ID]`: a cada minuto, por remetente, UMA rodada da campanha mais
+  prioritária pronta (`em_andamento`, ou `aprovada` com `agendada_para` vencido - aí ela vira `em_andamento`
+  com evento `iniciada` automático). Orçamento global de 50 s contado do começo do comando; desfechos que não
+  ocupam o remetente (`aguardando_tranche`, `categoria_mudou`, `aprovacao_invalidada`, `template_desconhecido`)
+  deixam a próxima campanha do mesmo remetente rodar no mesmo tick. Saída sem PII.
+- `disparo:sincronizar-remetentes [--rapido]`: `numero(fresco)` por remetente ativo, grava qualidade/tier/status/
+  display/verified/WABA/saúde (sem chaves) e um `SenderQualitySnapshot`; transições: qualquer→RED =
+  `bloquearPorQualidade` + Discord; qualquer→YELLOW = pausa campanhas MARKETING `em_andamento` + Discord;
+  RED/YELLOW→GREEN = `aquecimento_inicio = hoje` + Discord (o bloqueio por qualidade continua até humano religar).
+  `--rapido` só remetentes com campanha em andamento.
+- `disparo:sincronizar-templates [sender]`: template que sumiu da WABA vira DISABLED; categoria que mudou alerta
+  no Discord; lista vazia com cache cheio não desativa nada (precaução).
+- `disparo:registrar-webhook {sender}`: rotaciona o segredo, registra `/api/webhooks/kapso/{webhook_key}` com os
+  eventos de config + `whatsapp.contact.marketing_preference_changed`; se a Kapso recusar, o segredo antigo volta.
+  Mostra o segredo uma vez; `secret_key` da resposta nunca vai à trilha.
+- `disparo:registrar-numero {sender} status|solicitar|verificar|registrar` (provider meta): portado do
+  `mcp/src/registrar.ts` para `MetaCloudClient::solicitarCodigo/verificarCodigo/registrarNumero`.
+- `disparo:diagnostico`: falha (exit 1) sem batimento do agendador (`disparo:scheduler:heartbeat`, cache) ou do
+  worker (`disparo:worker:heartbeat`, gravado pelo `WorkerHeartbeatJob` despachado a cada 5 min), sem pepper,
+  remetente Kapso sem segredo ou sem webhook ativo com a URL desta instalação; avisa simulação, API_KEY e
+  Discord vazios, `webhook_calls` sem processar há mais de 10 min, falhas de envio em 24 h.
+- `disparo:processar-reguas [--segmentos]` e `disparo:podar` só chamam `ProcessadorDeReguas` e
+  `Importacao\Retencao` (outras frentes) quando existirem; sem a classe avisam e saem com sucesso.
+- Agenda (`routes/console.php`, tudo com `timezone('America/Sao_Paulo')` antes do horário, `withoutOverlapping(N)`
+  em minutos e saída em `storage/logs/disparo-agendado.log`): executar-campanhas a cada minuto (5); processar-reguas
+  a cada 10 min (30) e `--segmentos` 09:30; sincronizar-remetentes de hora em hora e `--rapido` a cada 10 min;
+  sincronizar-templates a cada 6 h; importar-historico-kapso `--todos` 03:00 e `--todos --incremental` a cada 15
+  min só com campanha em andamento; podar 04:00.
+
+### 10.1 Como os webhooks se comportam `[código]` (frente A, 28/10/2026)
+
+- Kapso: `POST /api/webhooks/kapso/{webhook_key}` (chave aleatória de 48 caracteres do remetente; desconhecida =
+  404). Assinatura HMAC-SHA256 do corpo cru com `senders.webhook_secret` - sem segredo ou inválida = 401, sem
+  fallback de `.env`. `phone_number_id` do corpo diferente do remetente da URL = ignorado (202, log sem PII).
+  `whatsapp.message.received` só conta com `kapso.direction = inbound`. Tudo roda INLINE antes do 200 (o "pare"
+  está gravado quando a Kapso recebe a resposta). `X-Idempotency-Key` vira `webhook_calls.idempotency_key` com
+  `insertOrIgnore` antes do processamento e `processado_em` no fim: entrega repetida já processada = 200 sem
+  repetir; lote que ficou pela metade (500) roda de novo na reentrega. `webhook_calls.payload` guarda só
+  contagens e os resumos do processador (ids, classificação) - nunca o corpo.
+- Status de wamid desconhecido (painel da Kapso, KYC no mesmo número) vira linha `origem=webhook` e conta em
+  `Sender::templatesNasUltimas24h()`; `pricing.category` do status vira `payload.categoria`.
+- Preferência de marketing (`whatsapp.contact.marketing_preference_changed`: `status`/`value` stop|stopped|
+  resume|resumed ou `marketing_allowed`) = supressão `meta_marketing_stopped` de escopo `marketing` no remetente;
+  resume libera só ela. Formato do payload da Kapso para esse evento ainda `[inferido]` (campos lidos de forma
+  tolerante: `phone_number`, `contact.phone_number`, `contact.wa_id`, `wa_id`).
+- Meta: `GET /api/webhooks/meta` (hub.verify_token com `hash_equals`), `POST` com `X-Hub-Signature-256`;
+  `metadata.phone_number_id` sem remetente `provider=meta` = 200 sem persistir; `user_preferences`
+  (`marketing_messages`, stop|resume) = a mesma supressão de marketing.
+- API v1 (`X-API-Key` = `API_KEY`; vazio = 503, errada = 401): `GET /api/v1/health`, `GET|POST /api/v1/suppressions`
+  (por hash; `since` lê `updated_at`, inclui liberadas; POST aceita telefone ou hash), `GET /api/v1/senders/{id}/
+  templates`, `GET /api/v1/contacts/{telefone}` (mascarado), `POST /api/v1/campaigns` (rascunho, `criado_por`
+  nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
+
 ## Histórico de atualizações
 
 ### 2026-10-28 - Réguas rodando, disjuntor compartilhado, suíte do núcleo
@@ -483,6 +538,13 @@ que deixava `sem_consentimento` morto para contato de origem externa quando a ca
 `exige_consentimento=false`. `whatsapp_messages.user_id` entrou no `$fillable` (o texto do painel estourava).
 Suíte: guardas (cada motivo), teto efetivo, supressões, executor (as classes de recusa, tranche, orçamento,
 janela), despachante, processador de eventos direto e réguas.
+
+### 2026-10-28 - Frente A: webhooks, API v1, comandos e agenda
+Implementados conforme as seções 8.1 e 10.1 (testes em `tests/Feature/Webhooks`, `Api` e `Console`). Correções
+em relação ao desenho original: processamento do webhook inline (não na fila), idempotência com
+`insertOrIgnore` e `processado_em`, chave aleatória na URL em vez do id do remetente, segredo por remetente sem
+fallback de `.env`, `pricing.category` do status, wamid desconhecido contando no teto.
+
 
 ### 2026-10-28 - Nascimento da plataforma
 Repositório reorganizado: a CLI/MCP em TypeScript foi para `mcp/` (envio real desligado); a raiz passa a
