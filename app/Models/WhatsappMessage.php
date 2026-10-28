@@ -93,7 +93,7 @@ class WhatsappMessage extends Model
     }
 
     /** A Meta só aceita texto livre até 24 h depois da última mensagem do cliente. */
-    public static function janelaAbertaAte(?\Carbon\CarbonInterface $ultimaResposta): ?\Carbon\CarbonInterface
+    public static function janelaAbertaAte(?CarbonInterface $ultimaResposta): ?CarbonInterface
     {
         if ($ultimaResposta === null) {
             return null;

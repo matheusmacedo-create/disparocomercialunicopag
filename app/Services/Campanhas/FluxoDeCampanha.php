@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\CampaignRecipient;
 use App\Models\Contact;
 use App\Models\MessageTemplate;
+use App\Models\Suppression;
 use App\Models\User;
 use App\Models\WhatsappMessage;
 use App\Services\Envio\Despachante;
@@ -267,7 +268,7 @@ final class FluxoDeCampanha
             $contato->save();
         }
 
-        if (\App\Models\Suppression::bloqueia($contato->telefone, $sender, $template?->categoria) !== null) {
+        if (Suppression::bloqueia($contato->telefone, $sender, $template?->categoria) !== null) {
             throw ValidationException::withMessages(['teste' => 'O seu telefone de teste está bloqueado (pediu para parar).']);
         }
 

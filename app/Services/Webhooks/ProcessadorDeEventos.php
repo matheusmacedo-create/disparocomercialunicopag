@@ -8,6 +8,7 @@ use App\Models\CampaignRecipient;
 use App\Models\Contact;
 use App\Models\ContactEvent;
 use App\Models\JourneyEnrollment;
+use App\Models\JourneyStep;
 use App\Models\Sender;
 use App\Models\Suppression;
 use App\Models\WhatsappMessage;
@@ -392,7 +393,7 @@ final class ProcessadorDeEventos
                 $proximo = $inscricao->journey->steps()->where('ordem', $inscricao->passo_atual)->first();
 
                 // Passo de texto na resposta: a resposta abriu a janela de 24 h, o texto sai agora.
-                if ($proximo !== null && $proximo->tipo === \App\Models\JourneyStep::TIPO_TEXTO) {
+                if ($proximo !== null && $proximo->tipo === JourneyStep::TIPO_TEXTO) {
                     $inscricao->forceFill(['proximo_em' => now()])->save();
                 } else {
                     $inscricao->encerrar(JourneyEnrollment::STATUS_SAIU, 'respondeu');

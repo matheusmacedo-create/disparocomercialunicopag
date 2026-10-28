@@ -14,10 +14,10 @@ use App\Models\Sender;
 use App\Models\Suppression;
 use App\Services\Envio\Guardas;
 use App\Services\Envio\MontadorDeComponentes;
+use App\Services\Segmentos\ConsultaDeSegmento;
 use App\Services\WhatsApp\WhatsAppException;
 use App\Support\Variaveis;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Do público da campanha (listas + segmento - exclusões) aos destinatários, com o motivo de quem fica de
@@ -147,7 +147,7 @@ final class MontadorDePublico
         // Sem segmento, a base entra inteira: quem está em opt-out ou inválido aparece na prévia como
         // excluído, com o motivo - o operador vê quanto da base já pediu para parar.
         $query = $segmento !== null
-            ? \App\Services\Segmentos\ConsultaDeSegmento::doSegmento($segmento)
+            ? ConsultaDeSegmento::doSegmento($segmento)
             : Contact::query();
 
         if ($listas !== []) {

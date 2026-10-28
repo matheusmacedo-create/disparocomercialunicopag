@@ -136,7 +136,6 @@ final class MontadorDeComponentes
      * {{1}}, {{2}}... ou {{nome}} do corpo.
      *
      * @param  list<string>  $marcadores
-     * @param  mixed  $corpo
      * @param  array<string, string>  $dados
      * @return list<array<string, string>>
      */

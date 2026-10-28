@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\Campanhas\FluxoDeCampanha;
+use App\Support\Ator;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -67,7 +69,7 @@ class Campaign extends Model
 
     /**
      * O que o formulário pode gravar. Transições de estado (`status`, aprovação, início, pausa) e o
-     * carimbo de quem criou NÃO são preenchíveis: só {@see \App\Services\Campanhas\FluxoDeCampanha}, com
+     * carimbo de quem criou NÃO são preenchíveis: só {@see FluxoDeCampanha}, com
      * `forceFill` e autorização no servidor - esconder a ação no Filament não basta.
      */
     protected $fillable = [
@@ -224,7 +226,7 @@ class Campaign extends Model
             'evento' => $evento,
             'detalhes' => $detalhes,
             'user_id' => $userId,
-            'ator' => \App\Support\Ator::atual($userId),
+            'ator' => Ator::atual($userId),
             'created_at' => now(),
         ]);
     }

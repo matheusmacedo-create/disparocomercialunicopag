@@ -23,6 +23,7 @@ final class TravaDoRemetente
      * Executa `$trabalho` com a trava do remetente; devolve `false` se outra rodada a segura.
      *
      * @template T
+     *
      * @param  Closure(): T  $trabalho
      * @return T|false
      */

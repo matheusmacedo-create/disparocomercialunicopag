@@ -16,6 +16,9 @@ return [
     // APP_KEY (key:generate o trocaria e todo hash deixaria de casar) e nunca roda. Produção não sobe sem ele.
     'hash_pepper' => env('DISPARO_HASH_PEPPER'),
 
+    // X-API-Key da API v1 (/api/v1: MCP, KYC lendo e gravando supressões). Vazio = API desligada (503).
+    'api_key' => env('API_KEY'),
+
     // Teto que nenhum remetente ultrapassa, mesmo editado no painel (o incidente foi 650 num dia).
     'teto_maximo_absoluto' => (int) env('DISPARO_TETO_MAXIMO_ABSOLUTO', 1000),
 

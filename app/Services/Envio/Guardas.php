@@ -11,6 +11,7 @@ use App\Models\Sender;
 use App\Models\Suppression;
 use App\Models\WhatsappMessage;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Elegibilidade do envio (KB 5): o primeiro motivo vale. "Do remetente" vale para a rodada inteira
@@ -236,7 +237,7 @@ final class Guardas
     }
 
     /** Templates que saíram ao telefone (todas as formas) e que a Meta não disse ter falhado. */
-    private static function templates(Contact $contato, ?int $senderId): \Illuminate\Database\Eloquent\Builder
+    private static function templates(Contact $contato, ?int $senderId): Builder
     {
         return WhatsappMessage::query()
             ->when($senderId !== null, fn ($q) => $q->where('sender_id', $senderId))

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\WhatsApp;
 
+use App\Support\Mask;
 use Illuminate\Http\Client\Response;
 use RuntimeException;
 
@@ -166,7 +167,7 @@ class WhatsAppException extends RuntimeException
 
         // A Meta ecoa valores de parâmetro recusados (100, 132012, 131030): nada de PII na mensagem, que vai
         // para coluna de motivo, log e Discord.
-        $original = \App\Support\Mask::scrub($original);
+        $original = Mask::scrub($original);
 
         return new self(
             trim(self::traduzir($response->status(), $codigo, $original).sprintf(' [%s: HTTP %d%s]', $operacao, $response->status(), $original !== '' ? ' - '.$original : '')),

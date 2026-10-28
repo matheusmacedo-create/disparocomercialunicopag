@@ -11,12 +11,13 @@ use App\Models\ContactList;
 use App\Models\MessageTemplate;
 use App\Models\Sender;
 use App\Models\Suppression;
-use App\Models\User;
 use App\Models\WhatsappMessage;
 use App\Services\Campanhas\FluxoDeCampanha;
 use App\Services\Envio\ExecutorDeCampanha;
 use App\Services\Envio\Guardas;
 use App\Support\Permissions;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
@@ -89,7 +90,7 @@ class FluxoDeCampanhaTest extends TestCase
         try {
             $fluxo->aprovar($campanha->refresh(), $operador, 5);
             $this->fail('operador sem approve campaigns');
-        } catch (\Illuminate\Auth\Access\AuthorizationException) {
+        } catch (AuthorizationException) {
         }
 
         // O admin precisa digitar o número certo.
@@ -257,7 +258,7 @@ class FluxoDeCampanhaTest extends TestCase
     {
         $campanha = $this->campanha();
 
-        $this->expectException(\Illuminate\Database\Eloquent\MassAssignmentException::class);
+        $this->expectException(MassAssignmentException::class);
         $campanha->fill(['status' => Campaign::STATUS_APROVADA, 'aprovado_por' => 1]);
     }
 }
