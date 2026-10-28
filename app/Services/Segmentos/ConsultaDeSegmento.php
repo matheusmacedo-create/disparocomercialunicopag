@@ -6,7 +6,9 @@ namespace App\Services\Segmentos;
 
 use App\Models\Contact;
 use App\Models\Segment;
+use App\Models\WhatsappMessage;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 
 /**
  * Regras JSON de um segmento → query de contatos (KB 4.3). Única tradução para SQL.
@@ -21,7 +23,11 @@ use Illuminate\Database\Eloquent\Builder;
  *  - respondeu_ha_dias: respondeu nos últimos N dias;
  *  - criado_apos, criado_antes: data (Y-m-d);
  *  - sem_whatsapp: false = exclui quem está em quarentena 131026 (padrão true = não filtra);
- *  - atributos: [{campo, operador (=|!=|contem|vazio|nao_vazio), valor}] sobre atributos JSON.
+ *  - atributos: [{campo, operador (=|!=|contem|vazio|nao_vazio), valor}] sobre atributos JSON;
+ *  - recebeu_template, nao_recebeu_template: {nome, dias} - template outbound ao telefone (qualquer
+ *    remetente, qualquer origem, inclusive histórico da Kapso) que a Meta não disse ter falhado, nos
+ *    últimos N dias (dias vazio = desde sempre);
+ *  - campanha: {campaign_id, status: [...]} - esteve na campanha com um destes status (vazio = qualquer).
  */
 final class ConsultaDeSegmento
 {
@@ -98,7 +104,46 @@ final class ConsultaDeSegmento
             };
         }
 
+        $recebeu = (array) ($regras['recebeu_template'] ?? []);
+
+        if (filled($recebeu['nome'] ?? null)) {
+            $query->whereExists(fn (QueryBuilder $q) => self::templatesAoTelefone($q, (string) $recebeu['nome'], self::inteiro($recebeu['dias'] ?? null)));
+        }
+
+        $naoRecebeu = (array) ($regras['nao_recebeu_template'] ?? []);
+
+        if (filled($naoRecebeu['nome'] ?? null)) {
+            $query->whereNotExists(fn (QueryBuilder $q) => self::templatesAoTelefone($q, (string) $naoRecebeu['nome'], self::inteiro($naoRecebeu['dias'] ?? null)));
+        }
+
+        $campanha = (array) ($regras['campanha'] ?? []);
+
+        if ((int) ($campanha['campaign_id'] ?? 0) > 0) {
+            $status = self::lista($campanha['status'] ?? null);
+
+            $query->whereHas('campaignRecipients', fn (Builder $q) => $q
+                ->where('campaign_id', (int) $campanha['campaign_id'])
+                ->when($status !== [], fn (Builder $q) => $q->whereIn('status', $status)));
+        }
+
         return $query;
+    }
+
+    /**
+     * Templates que saíram ao telefone do contato (por telefone, não por contact_id: o histórico da Kapso
+     * e o que o webhook viu sair por fora podem não ter o vínculo). Colunas qualificadas: `status` e
+     * `tipo` existem nas duas tabelas.
+     */
+    private static function templatesAoTelefone(QueryBuilder $q, string $nome, ?int $dias): QueryBuilder
+    {
+        return $q->selectRaw('1')
+            ->from('whatsapp_messages')
+            ->whereColumn('whatsapp_messages.telefone', 'contacts.telefone')
+            ->where('whatsapp_messages.direcao', WhatsappMessage::OUTBOUND)
+            ->where('whatsapp_messages.tipo', WhatsappMessage::TIPO_TEMPLATE)
+            ->where('whatsapp_messages.template_nome', $nome)
+            ->where('whatsapp_messages.status', '!=', WhatsappMessage::STATUS_FAILED)
+            ->when($dias !== null, fn (QueryBuilder $q) => $q->where('whatsapp_messages.enviado_em', '>=', now()->subDays($dias)));
     }
 
     public static function doSegmento(Segment $segment): Builder

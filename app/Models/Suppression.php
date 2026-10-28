@@ -103,6 +103,23 @@ class Suppression extends Model
         return $this->belongsTo(Sender::class);
     }
 
+    /** Quem bloqueou à mão (painel). */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function liberadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'liberada_por');
+    }
+
+    /** @return array<string, string> */
+    public static function escopoLabels(): array
+    {
+        return [self::ESCOPO_TUDO => 'Tudo (qualquer template, todos os remetentes)', self::ESCOPO_MARKETING => 'Só marketing'];
+    }
+
     public static function chaveDe(string $telefoneE164, ?int $senderId): string
     {
         return Telefone::hash($telefoneE164).':'.($senderId ?? 'todos');

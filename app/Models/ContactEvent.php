@@ -62,6 +62,7 @@ class ContactEvent extends Model
             'conversa_lida' => 'Conversa lida',
             'consentimento' => 'Consentimento registrado',
             'texto_enviado' => 'Texto enviado pelo painel',
+            'dados_exportados' => 'Dados do titular exportados',
         ];
     }
 }

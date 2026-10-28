@@ -140,6 +140,17 @@ class Contact extends Model
         ];
     }
 
+    public static function statusColor(?string $status): string
+    {
+        return match ($status) {
+            self::STATUS_ATIVO => 'success',
+            self::STATUS_OPTOUT => 'danger',
+            self::STATUS_INVALIDO => 'warning',
+            self::STATUS_ANONIMIZADO => 'gray',
+            default => 'gray',
+        };
+    }
+
     /** @return array<string, string> */
     public static function origemLabels(): array
     {
@@ -202,6 +213,23 @@ class Contact extends Model
     public function journeyEnrollments(): HasMany
     {
         return $this->hasMany(JourneyEnrollment::class);
+    }
+
+    /** Trilha por contato, chaveada pelo hash do telefone (sobrevive à anonimização). */
+    public function events(): HasMany
+    {
+        return $this->hasMany(ContactEvent::class, 'telefone_hash', 'telefone_hash')->orderByDesc('id');
+    }
+
+    /** Supressões do telefone (vigentes e liberadas), também pelo hash. */
+    public function suppressions(): HasMany
+    {
+        return $this->hasMany(Suppression::class, 'telefone_hash', 'telefone_hash')->orderByDesc('id');
+    }
+
+    public function anonimizado(): bool
+    {
+        return $this->status === self::STATUS_ANONIMIZADO;
     }
 
     public function scopeAtivos(Builder $query): Builder

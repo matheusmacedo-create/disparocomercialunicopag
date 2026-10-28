@@ -22,7 +22,12 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'ativo',
+        'telefone_teste',
     ];
+
+    /** Usuário novo nasce ativo (e a instância recém-criada já sabe disso sem reler o banco). */
+    protected $attributes = ['ativo' => true];
 
     /** @var list<string> */
     protected $hidden = [
@@ -36,6 +41,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'ativo' => 'boolean',
         ];
     }
 
@@ -52,9 +58,12 @@ class User extends Authenticatable implements FilamentUser
         });
     }
 
-    /** Painel só para quem tem papel: usuário sem papel não entra. */
+    /**
+     * Painel só para quem tem papel E está ativo: usuário é desativado, nunca apagado (a trilha guarda o
+     * `user_id` de quem aprovou), e desativado não entra mais.
+     */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->roles()->exists();
+        return (bool) $this->ativo && $this->roles()->exists();
     }
 }
