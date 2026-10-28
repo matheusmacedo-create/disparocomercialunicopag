@@ -5,7 +5,32 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+[x-cloak] {
+    display: none !important;
+}
+
+/* Identidade ÚnicoPag (refatoração de 2026-08-26, protótipo "Novo Onboarding"):
+   navy #1c3154 como cor de marca, coral #dc3645 como acento, fonte Inter.
+   A escala primary-* é o navy - todo botão/focus/link das páginas públicas
+   herda a marca daqui, sem classe nova nas views. */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Inter', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-primary-50: #f2f5f9;
+    --color-primary-100: #e3e9f2;
+    --color-primary-200: #c3d0e2;
+    --color-primary-300: #9bb0cc;
+    --color-primary-400: #6c88af;
+    --color-primary-500: #435f8b;
+    --color-primary-600: #1c3154;
+    --color-primary-700: #142743;
+    --color-primary-800: #0f1e35;
+    --color-primary-900: #0b1527;
+
+    --color-coral-50: #fdf1f2;
+    --color-coral-100: #fbdfe1;
+    --color-coral-500: #dc3645;
+    --color-coral-600: #c72b3a;
+    --color-coral-700: #a82231;
 }

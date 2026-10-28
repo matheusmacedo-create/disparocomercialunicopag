@@ -24,3 +24,6 @@ yarn-error.log
 /database/*.sqlite
 /storage/framework/testing/run-*
 *.log
+/public/css/filament
+/public/js/filament
+/public/fonts/filament

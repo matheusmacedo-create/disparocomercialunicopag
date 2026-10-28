@@ -1,59 +1,65 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ÚnicoPag Disparos
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Plataforma de disparos de WhatsApp da ÚnicoPag: **recuperação** de sellers inativos, **ativação** de
+sellers novos e **ofertas** a bases compartilhadas com a UnicoDrop, com bases de contatos, segmentos,
+campanhas aprovadas em quatro olhos, réguas de nutrição e as proteções que o incidente de 26/10/2026
+(número comercial em RED depois de 650 envios frios) exigiu: opt-out para sempre, teto diário com
+aquecimento, janela de horário, tranches com disjuntor de engajamento e trilha de tudo.
 
-## About Laravel
+Fala com a **Kapso** (WhatsApp oficial, histórico, webhook) e com a **Meta Cloud API** direta. Mesmo desenho
+do KYC (`unico-pag/unicopag-kyc`) e do MED (`autorespondermed2.0`): Laravel 12, Filament 4 em `/admin`,
+MySQL/MariaDB em produção, SQLite nos testes, fila em banco, Forge.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+A memória do sistema (como ele se comporta e por quê) está em **`doc/DISPARO_KNOWLEDGE_BASE.md`**. Leia
+antes de mexer.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Rodar localmente
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer setup            # install, .env, key, migrate, npm install, build
+php artisan make:filament-user   # o primeiro usuário vira Super Admin
+composer run dev          # server + fila + logs + vite
+```
 
-## Learning Laravel
+No `.env`: `DISPARO_HASH_PEPPER` (gere com `openssl rand -hex 32`; sem ele nenhum hash sai) e, para
+falar com a Kapso, `KAPSO_API_KEY`. `DISPARO_ENVIO_HABILITADO=false` (padrão) mantém tudo em simulação:
+a campanha roda inteira sem mandar nada.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Testes: `composer test` (PHPUnit; Kapso e Meta sempre por `Http::fake`). Estilo: `./vendor/bin/pint`.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Fluxo de uso
 
-## Laravel Sponsors
+1. **Configuração → Remetentes**: cadastre o número (provider, `phone_number_id`, categorias permitidas
+   MARKETING/UTILITY, teto, ritmo, janela), registre o webhook e sincronize número e templates.
+2. **Importações**: importe o **histórico da Kapso** do número (quem já recebeu o quê, quem respondeu,
+   quem pediu para parar) e as bases (CSV da UnicoDrop, sellers inativos do unico-api).
+3. **Contatos / Bases / Segmentos**: organize quem recebe o quê; bloqueios e pedidos para parar valem
+   para sempre.
+4. **Disparos → Campanhas**: template aprovado, variáveis mapeadas, público, prévia com motivos de
+   exclusão e custo, aprovação por outra pessoa (ou auto-aprovação com espera e teto), execução em
+   tranches dentro do teto e da janela.
+5. **Disparos → Réguas**: sequências de passos (template, aguardar, condição, texto na resposta),
+   aprovadas como as campanhas.
+6. **Conversas**: respostas dos clientes para tratar (janela de 24 h, pedidos LGPD com prazo).
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Comandos
 
-### Premium Partners
+| Comando | O que faz |
+|---|---|
+| `disparo:executar-campanhas` | uma rodada das campanhas em andamento (agendado a cada minuto) |
+| `disparo:processar-reguas` | passos vencidos das réguas (a cada 10 min); `--segmentos` reavalia gatilhos |
+| `disparo:sincronizar-remetentes` | qualidade, tier e saúde dos números (de hora em hora; `--rapido` a cada 10 min com campanha rodando) |
+| `disparo:sincronizar-templates` | cache dos templates da Meta |
+| `disparo:importar-historico-kapso {sender}` | histórico de conversas, mensagens e broadcasts da Kapso |
+| `disparo:importar-csv`, `disparo:importar-sellers-inativos` | bases |
+| `disparo:registrar-webhook {sender}` | gera o segredo e cadastra o webhook na Kapso |
+| `disparo:diagnostico` | cron, worker, interruptor, pepper, remetentes, webhooks |
+| `disparo:podar` | retenção (LGPD) |
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Deploy: `doc/DEPLOY_FORGE.md` e `deploy/forge-deploy.sh`.
 
-## Contributing
+## `mcp/`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+A CLI/MCP original em TypeScript (direto na Cloud API da Meta). Continua útil para listar templates,
+consultar o número e simular; o **envio real fica desligado** (`MCP_ENVIO_REAL=true` só para emergência),
+porque ela não vê supressões, teto, janela nem aprovação. Caminho natural: cliente da `/api/v1`.
