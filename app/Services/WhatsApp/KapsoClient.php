@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\WhatsApp;
 
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -16,6 +17,11 @@ use Illuminate\Http\Client\Response;
  */
 class KapsoClient extends GraphClient
 {
+    /** Últimos cabeçalhos de limite da Kapso (X-RateLimit-Remaining / Retry-After), para o importador se dosar. */
+    private ?int $rateLimitRestante = null;
+
+    private ?int $retryAfter = null;
+
     protected function baseGraph(): string
     {
         return rtrim((string) config('disparo.provedores.kapso.base_url', 'https://api.kapso.ai'), '/').'/meta/whatsapp/'.config('disparo.provedores.kapso.graph_version', 'v24.0');
@@ -34,6 +40,39 @@ class KapsoClient extends GraphClient
     protected function nomeDoProvedor(): string
     {
         return 'Kapso';
+    }
+
+    /**
+     * Toda consulta passa por aqui: antes de traduzir a recusa, guarda os cabeçalhos de rate limit (1000
+     * req/min no Pro). O importador do histórico lê {@see self::rateLimitRestante()} depois de cada página
+     * e {@see self::retryAfter()} num 429; o envio de campanha não espera aqui (o executor trata o 429
+     * como transitório).
+     */
+    protected function consultar(string $operacao, Closure $requisicao): Response
+    {
+        return parent::consultar($operacao, function () use ($requisicao): Response {
+            $response = $requisicao();
+
+            $restante = $response->header('X-RateLimit-Remaining');
+            $this->rateLimitRestante = is_numeric($restante) ? (int) $restante : null;
+
+            $retryAfter = $response->header('Retry-After');
+            $this->retryAfter = is_numeric($retryAfter) ? max(1, (int) $retryAfter) : null;
+
+            return $response;
+        });
+    }
+
+    /** Requisições que ainda cabem no minuto, segundo a última resposta da Kapso (null = não informou). */
+    public function rateLimitRestante(): ?int
+    {
+        return $this->rateLimitRestante;
+    }
+
+    /** Segundos pedidos pela Kapso na última resposta 429 (null = não informou). */
+    public function retryAfter(): ?int
+    {
+        return $this->retryAfter;
     }
 
     /** O número pela API da Kapso: traz `kind` (sandbox|production) e a WABA, que a Graph não dá. */

@@ -69,11 +69,18 @@ class Contact extends Model
         'atributos', 'status', 'optout_em', 'optout_motivo', 'optout_origem', 'sem_whatsapp_em',
         'marketing_carencia_ate', 'recusou_em', 'recusas_total', 'provavel_bloqueio_em',
         'consentimento_origem', 'consentimento_em', 'consentimento_canal', 'consentimento_detalhes',
-        'kapso_contact_id', 'observacoes',
+        'kapso_contact_id', 'kapso_conversation_id', 'nome_origem', 'observacoes',
     ];
 
     /** Origens externas: MARKETING só com consentimento registrado em nome da ÚnicoPag (KB 2.13). */
     public const ORIGENS_EXTERNAS = ['unicodrop', 'csv'];
+
+    /**
+     * Precedência do nome entre as fontes (achado da revisão de 28/10): o cadastro do unico-api vale mais
+     * que a planilha, que vale mais que o perfil do WhatsApp (apelido, emoji, loja), que vale mais que o
+     * que alguém digitou. Vazio nunca apaga; a Kapso só preenche vazio.
+     */
+    private const PRECEDENCIA_DO_NOME = ['unicoapi' => 4, 'unicopag' => 4, 'csv' => 3, 'unicodrop' => 3, 'kapso' => 2, 'manual' => 1];
 
     /** @return array<string, string> */
     public static function consentimentoLabels(): array
@@ -115,7 +122,11 @@ class Contact extends Model
     protected static function booted(): void
     {
         static::saving(function (self $contato): void {
-            $contato->telefone_hash = Telefone::hash((string) $contato->telefone);
+            // Depois da anonimização o telefone é um marcador ("anon:..."): o hash do número real fica, é
+            // ele que mantém a supressão e a trilha (KB 2.13).
+            if (! Telefone::anonimizado((string) $contato->telefone)) {
+                $contato->telefone_hash = Telefone::hash((string) $contato->telefone);
+            }
 
             if ($contato->isDirty('documento')) {
                 $digitos = preg_replace('/\D/', '', (string) $contato->documento) ?? '';
@@ -171,12 +182,64 @@ class Contact extends Model
         foreach (preg_split('/\s+/', trim($nome)) ?: [] as $parte) {
             $parte = trim($parte, " \t\n\r\0\x0B-.,;:");
 
-            if ($parte !== '' && preg_match('/\d/', $parte) !== 1 && mb_strlen($parte) > 1) {
+            // Só emoji/símbolo ("🌸") também não serve: precisa ter letra.
+            if ($parte !== '' && preg_match('/\d/', $parte) !== 1 && preg_match('/\p{L}/u', $parte) === 1 && mb_strlen($parte) > 1) {
                 return mb_substr(Str::ucfirst(Str::lower($parte)), 0, 80);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Nome como vem da planilha ou do cadastro, limpo: espaços colapsados e CAIXA ALTA virando Title Case
+     * (com as partículas em minúsculas) - "MARIA DAS DORES" num template fica gritando. Null = vazio.
+     */
+    public static function nomeHigienizado(?string $nome): ?string
+    {
+        $nome = trim((string) preg_replace('/\s+/u', ' ', (string) $nome));
+
+        // Sem letra nenhuma (só emoji, símbolo ou número) não é nome: num template ficaria "Oi 🌸".
+        if ($nome === '' || preg_match('/\p{L}/u', $nome) !== 1) {
+            return null;
+        }
+
+        if (mb_strtoupper($nome) === $nome && preg_match('/\p{L}/u', $nome) === 1) {
+            $nome = mb_convert_case(mb_strtolower($nome), MB_CASE_TITLE, 'UTF-8');
+            $nome = (string) preg_replace_callback('/(?<=\s)(Da|De|Do|Das|Dos|Di|Du|E|Del|Della|Van|Von)(?=\s)/u', fn (array $m): string => mb_strtolower($m[1]), $nome);
+        }
+
+        return mb_substr($nome, 0, 255);
+    }
+
+    public static function precedenciaDoNome(?string $origem): int
+    {
+        return self::PRECEDENCIA_DO_NOME[(string) $origem] ?? 0;
+    }
+
+    /**
+     * Preenche ou troca o nome respeitando a precedência das fontes: vazio não apaga; fonte mais fraca que a
+     * do nome atual não sobrescreve; a Kapso (perfil do WhatsApp) só preenche vazio. Não salva. True = mudou.
+     */
+    public function atualizarNome(?string $nome, string $origem): bool
+    {
+        $nome = self::nomeHigienizado($nome);
+
+        if ($nome === null || $nome === $this->nome) {
+            return false;
+        }
+
+        if (filled($this->nome)) {
+            if ($origem === 'kapso' || self::precedenciaDoNome($origem) < self::precedenciaDoNome($this->nome_origem ?? $this->origem)) {
+                return false;
+            }
+        }
+
+        $this->nome = $nome;
+        $this->nome_origem = mb_substr($origem, 0, 20);
+        $this->primeiro_nome = self::primeiroNomeDe($nome);
+
+        return true;
     }
 
     public function tags(): BelongsToMany
@@ -285,14 +348,26 @@ class Contact extends Model
         $this->forceFill(['marketing_carencia_ate' => now()->addDays((int) config('disparo.guardas.marketing_carencia_dias', 7))])->save();
     }
 
-    /** "Não"/"agora não" a template MARKETING: carência; na segunda recusa, supressão de marketing. */
-    public function registrarRecusa(?int $senderId, ?string $wamid = null): void
+    /**
+     * "Não"/"agora não" a template MARKETING: carência; na segunda recusa, supressão de marketing. `$quando`
+     * é o momento da resposta (o histórico importado da Kapso traz recusas antigas: a carência conta de lá,
+     * e uma recusa mais antiga que a já registrada não rejuvenesce a carência).
+     */
+    public function registrarRecusa(?int $senderId, ?string $wamid = null, ?CarbonInterface $quando = null): void
     {
-        $this->forceFill(['recusou_em' => now(), 'recusas_total' => $this->recusas_total + 1])->save();
+        $quando ??= now();
+        $recusouEm = $this->recusou_em !== null && $this->recusou_em->gt($quando) ? $this->recusou_em : $quando;
+
+        $this->forceFill(['recusou_em' => $recusouEm, 'recusas_total' => $this->recusas_total + 1])->save();
 
         if ($this->recusas_total >= (int) config('disparo.guardas.recusas_para_suprimir', 2)) {
-            Suppression::suprimir($this->telefone, Suppression::MOTIVO_RECUSAS, 'resposta', null, Suppression::ESCOPO_MARKETING, $wamid, 'recusou ofertas '.$this->recusas_total.' vezes');
+            Suppression::suprimir($this->telefone, Suppression::MOTIVO_RECUSAS, 'resposta', null, Suppression::ESCOPO_MARKETING, $wamid, 'recusou ofertas '.$this->recusas_total.' vezes', null, $quando);
         }
+    }
+
+    public function anonimizado(): bool
+    {
+        return $this->status === self::STATUS_ANONIMIZADO;
     }
 
     /** Opt-in colhido no WhatsApp ("Quero receber" num template nosso). */

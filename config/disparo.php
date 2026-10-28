@@ -131,6 +131,28 @@ return [
         // Janela da importação incremental da Kapso quando o remetente nunca importou (dias).
         'janela_inicial_dias' => (int) env('DISPARO_HISTORICO_JANELA_INICIAL_DIAS', 180),
         'pagina' => 100,
+        // Importação incremental recomeça esta folga antes de `historico_importado_ate` (status que mudou tarde).
+        'folga_incremental_minutos' => 60,
+        // Resposta recebida até N dias depois de um template nosso é lida como resposta a ele (KB 6).
+        'resposta_janela_dias' => 7,
+        // Destinatário de broadcast casa com mensagem já registrada (mesmo telefone e template) dentro desta folga.
+        'broadcast_tolerancia_minutos' => 30,
+        // Rate limit da Kapso (1000 req/min no Pro): com poucas requisições restantes, espera; 429 espera o Retry-After.
+        'rate_limit_minimo' => 20,
+        'rate_limit_espera_segundos' => 15,
+        'rate_limit_tentativas' => 3,
+    ],
+
+    'importacao' => [
+        // Linhas mostradas na prévia do mapeamento, antes de enfileirar.
+        'previa_linhas' => 10,
+        // Nomes de coluna que detectam o telefone (como a CLI original, mcp/src/dispatch.ts).
+        'colunas_telefone' => ['phone', 'telefone', 'whatsapp', 'celular', 'numero', 'número', 'fone'],
+        // Coluna cujo nome contém isto só pode ir para campo tipado (documento) ou ser ignorada - nunca
+        // para `atributos` (que viram variável de template e ficam em claro).
+        'denylist' => ['cpf', 'cnpj', 'documento', 'rg', 'endereco', 'nascimento', 'renda', 'senha'],
+        // Sellers inativos: destinatário de campanha com envio até N dias antes da venda conta como conversão.
+        'conversao_janela_dias' => 30,
     ],
 
     'provedores' => [
@@ -183,6 +205,11 @@ return [
         'base_url' => env('UNICOPAG_API_BASE_URL'),
         'key' => env('UNICOPAG_API_KEY'),
         'register_endpoint' => env('UNICOPAG_REGISTER_ENDPOINT', '/api/kyc-panel/accounts/{account_id}/register'),
+        // Lista de sellers inativos (contrato JSON: account_id, telefone?, nome?, email?, ultima_venda_em?,
+        // dias_sem_venda?, etapa?, aprovado_em?). Caminho relativo à base ou URL absoluta; `{dias}` é substituído.
+        'sellers_endpoint' => env('UNICOPAG_SELLERS_ENDPOINT'),
+        // Cache do cadastro já normalizado (telefone E.164 e nome), por conta.
+        'cache_cadastro_horas' => 24,
         'timeout' => 8,
     ],
 ];

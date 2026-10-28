@@ -118,6 +118,12 @@ final class Telefone
         return 'anon:'.substr(self::hash($telefoneE164), 0, 12);
     }
 
+    /** O valor da coluna telefone já é o marcador da anonimização, não um número. */
+    public static function anonimizado(?string $telefone): bool
+    {
+        return str_starts_with((string) $telefone, 'anon:');
+    }
+
     private static function pepper(): string
     {
         $pepper = (string) config('disparo.hash_pepper');
