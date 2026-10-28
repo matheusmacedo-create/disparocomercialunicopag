@@ -61,6 +61,7 @@ class CampaignEvent extends Model
             'simulada_execucao' => 'Rodou em simulação',
             'teste_enviado' => 'Teste enviado',
             'duplicada' => 'Duplicada',
+            'exportada' => 'Destinatários exportados',
         ];
     }
 }
