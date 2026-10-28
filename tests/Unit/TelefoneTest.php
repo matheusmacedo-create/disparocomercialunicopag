@@ -97,4 +97,14 @@ class TelefoneTest extends TestCase
         $this->assertSame('America/Cuiaba', Telefone::fusoDoDdd('+5565998765432'));
         $this->assertNull(Telefone::fusoDoDdd('+12036602780'));
     }
+
+    public function test_canonico_completa_o_nono_digito_com_e_sem_ddi(): void
+    {
+        $this->assertSame('+5521987654321', Telefone::canonico('21 8765-4321'));
+        $this->assertSame('+5521987654321', Telefone::canonico('(021) 8765-4321'));
+        $this->assertSame('+5521987654321', Telefone::canonico('+55 21 8765-4321'));
+        $this->assertSame('+5521987654321', Telefone::canonico('552187654321'));
+        $this->assertSame('+552133334444', Telefone::canonico('21 3333-4444'), 'fixo não ganha 9');
+        $this->assertNull(Telefone::canonico('21 1234-5678'), '10 dígitos que não são celular nem fixo válido');
+    }
 }

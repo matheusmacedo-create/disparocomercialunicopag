@@ -105,8 +105,8 @@ final class FluxoDeRegua
         $this->exigirStatus($journey, [Journey::STATUS_AGUARDANDO_APROVACAO]);
         $this->validar($journey);
 
-        if ($journey->criado_por !== null && $journey->criado_por === $user->id && ! $user->hasRole(Permissions::ROLE_SUPER_ADMIN)) {
-            throw ValidationException::withMessages(['aprovacao' => 'Quem criou a régua não aprova a própria régua.']);
+        if ($journey->criado_por === null || $journey->criado_por === $user->id) {
+            throw ValidationException::withMessages(['aprovacao' => 'Quem criou a régua não aprova a própria régua (sem exceção; régua sem criador registrado também não).']);
         }
 
         $journey->forceFill(['status' => Journey::STATUS_APROVADA, 'aprovado_por' => $user->id, 'aprovado_em' => now()])->save();

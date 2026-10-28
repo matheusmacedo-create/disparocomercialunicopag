@@ -21,7 +21,9 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Closure;
 use Generator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -61,6 +63,23 @@ final class ImportadorKapso
      *                                        contatos (bool), broadcasts (bool), user_id (?int)
      */
     public function importar(Sender $sender, array $opcoes = []): ContactImport
+    {
+        // Uma importação por remetente por vez (painel, agenda completa e incremental): a segunda espera a próxima.
+        $trava = Cache::lock('disparo:importar-historico:'.$sender->id, 7200);
+
+        if (! $trava->get()) {
+            throw new RuntimeException(sprintf('Já existe uma importação do histórico do remetente "%s" em andamento.', $sender->nome));
+        }
+
+        try {
+            return $this->importarTravado($sender, $opcoes);
+        } finally {
+            $trava->release();
+        }
+    }
+
+    /** @param  array<string, mixed>  $opcoes */
+    private function importarTravado(Sender $sender, array $opcoes): ContactImport
     {
         $cliente = $this->clientes->kapso($sender);
         [$desde, $ate, $incremental] = $this->janela($sender, $opcoes);
@@ -186,6 +205,11 @@ final class ImportadorKapso
             }
 
             $contato = $this->contato($sender, $telefone, $this->texto($conversa, ['kapso.contact_name', 'contact_name', 'kapso.contact.name', 'contact.name', 'contact.profile_name']), $c);
+
+            if ($contato === null) {
+                continue;
+            }
+
             $mudancas = [];
 
             if (($conversaId = $this->texto($conversa, ['id', 'kapso.id', 'kapso.conversation_id'])) !== null && $contato->kapso_conversation_id !== $conversaId) {
@@ -273,6 +297,11 @@ final class ImportadorKapso
             : (in_array($statusKapso, [WhatsappMessage::STATUS_PENDING, WhatsappMessage::STATUS_SENT, WhatsappMessage::STATUS_DELIVERED, WhatsappMessage::STATUS_READ, WhatsappMessage::STATUS_FAILED], true) ? $statusKapso : ($codigoErro !== null ? WhatsappMessage::STATUS_FAILED : WhatsappMessage::STATUS_SENT));
 
         $contato = $this->contato($sender, $telefone, $this->texto($item, ['kapso.contact_name', 'contact_name', 'profile.name', 'kapso.profile_name']), $c);
+
+        if ($contato === null) {
+            return;
+        }
+
         $contextWamid = $this->texto($item, ['context.id', 'kapso.context_id', 'context_wamid']);
 
         $mensagem = WhatsappMessage::query()->firstOrCreate(['wamid' => mb_substr($wamid, 0, 120)], [
@@ -388,8 +417,8 @@ final class ImportadorKapso
         $c['classificadas'][$classificacao] = ($c['classificadas'][$classificacao] ?? 0) + 1;
 
         if ($classificacao === ClassificadorDeResposta::PARAR || $classificacao === ClassificadorDeResposta::PEDIDO_LGPD) {
-            $motivoTexto = ClassificadorDeResposta::motivo($textos);
-            $nova = Suppression::suprimir($contato->telefone, Suppression::MOTIVO_HISTORICO, 'historico_kapso', null, Suppression::ESCOPO_TUDO, $mensagem->wamid, $motivoTexto, null, $quando);
+            // Só a classificação: o texto do cliente nunca sai da memória (KB 7).
+            $nova = Suppression::suprimir($contato->telefone, Suppression::MOTIVO_HISTORICO, 'historico_kapso', null, Suppression::ESCOPO_TUDO, $mensagem->wamid, 'classificado no histórico como '.$classificacao, null, $quando);
 
             if ($nova) {
                 $c['supressoes'][Suppression::MOTIVO_HISTORICO] = ($c['supressoes'][Suppression::MOTIVO_HISTORICO] ?? 0) + 1;
@@ -563,6 +592,11 @@ final class ImportadorKapso
             default => WhatsappMessage::STATUS_SENT,
         };
         $contato = $this->contato($sender, $telefone, $this->texto($destinatario, ['contact_name', 'name', 'profile_name']), $c);
+
+        if ($contato === null) {
+            return;
+        }
+
         $wamid = $this->texto($destinatario, ['wamid', 'message_id', 'whatsapp_message_id']);
 
         $existente = $wamid !== null ? WhatsappMessage::query()->where('wamid', $wamid)->first() : null;
@@ -659,11 +693,18 @@ final class ImportadorKapso
      *
      * @param  array<string, mixed>  $c
      */
-    private function contato(Sender $sender, string $telefone, ?string $nomeDoPerfil, array &$c): Contact
+    private function contato(Sender $sender, string $telefone, ?string $nomeDoPerfil, array &$c): ?Contact
     {
         $contato = Contact::query()->porTelefone($telefone)->first();
 
         if ($contato === null) {
+            // Direito de exclusão exercido: o histórico não recria a pessoa (nem contato, nem perfil, nem mensagem).
+            if (Suppression::bloqueia($telefone, null, null) === Suppression::MOTIVO_ANONIMIZADO) {
+                $c['contatos']['anonimizados'] = ($c['contatos']['anonimizados'] ?? 0) + 1;
+
+                return null;
+            }
+
             $contato = new Contact([
                 'telefone' => $telefone,
                 'origem' => 'kapso',
@@ -920,9 +961,18 @@ final class ImportadorKapso
                 yield $item;
             }
 
+            $anterior = $after;
             $after = $resultado['after'];
 
             if ($after === null) {
+                return;
+            }
+
+            // Cursor que não anda ou páginas demais: o formato da Kapso ainda é [inferido]; melhor parar com aviso.
+            if ($after === $anterior || $c['paginas'] >= (int) config('disparo.historico.max_paginas', 5000)) {
+                Log::warning('Importação da Kapso interrompida: cursor repetido ou teto de páginas', ['paginas' => $c['paginas']]);
+                $c['paginacao_interrompida'] = ($c['paginacao_interrompida'] ?? 0) + 1;
+
                 return;
             }
 

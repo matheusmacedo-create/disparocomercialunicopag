@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
 /**
  * Cadastra (ou atualiza) na Kapso o webhook deste sistema para o número do remetente (KB 10): gera um
  * segredo novo, registra a URL com a chave aleatória do remetente e os eventos de mensagem mais a
- * preferência de marketing. O segredo fica criptografado no remetente e é mostrado UMA vez aqui.
+ * preferência de marketing. O segredo fica criptografado no remetente e nunca sai na tela nem no log.
  *
  * Convive com os webhooks do KYC e do MED no mesmo número (a Kapso aceita vários por número): cada um tem
  * URL e segredo próprios. Se a Kapso recusar, o segredo antigo volta - senão o webhook em produção
@@ -89,7 +89,7 @@ final class RegistrarWebhookCommand extends Command
         $this->line('URL: '.$url);
         $this->line('Eventos: '.implode(', ', $eventos));
         $this->newLine();
-        $this->warn('Segredo do webhook (mostrado UMA vez; já está gravado criptografado no remetente): '.$segredo);
+        $this->info('Segredo novo gerado, enviado à Kapso e gravado criptografado no remetente (não é mostrado: rode de novo para rotacionar).');
 
         return self::SUCCESS;
     }

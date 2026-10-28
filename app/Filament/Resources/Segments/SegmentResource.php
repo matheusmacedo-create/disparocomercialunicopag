@@ -8,6 +8,8 @@ use App\Filament\Resources\Segments\Pages\EditSegment;
 use App\Filament\Resources\Segments\Pages\ListSegments;
 use App\Filament\Resources\Segments\Schemas\SegmentForm;
 use App\Filament\Resources\Segments\Tables\SegmentsTable;
+use App\Models\Campaign;
+use App\Models\Journey;
 use App\Models\Segment;
 use App\Support\Permissions;
 use BackedEnum;
@@ -106,8 +108,19 @@ class SegmentResource extends Resource
         return Permissions::allows(Permissions::MANAGE_CONTACTS);
     }
 
+    /** Segmento usado por campanha aberta ou por régua não se apaga: o público viraria a base inteira. */
     public static function canDelete(Model $record): bool
     {
-        return Permissions::allows(Permissions::MANAGE_CONTACTS);
+        if (! Permissions::allows(Permissions::MANAGE_CONTACTS)) {
+            return false;
+        }
+
+        $emCampanha = Campaign::query()
+            ->whereNotIn('status', [Campaign::STATUS_CONCLUIDA, Campaign::STATUS_CANCELADA])
+            ->where('publico->segment_id', $record->getKey())
+            ->exists();
+        $emRegua = Journey::query()->where('gatilho', Journey::GATILHO_SEGMENTO)->where('gatilho_ref', $record->getKey())->exists();
+
+        return ! $emCampanha && ! $emRegua;
     }
 }

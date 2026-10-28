@@ -140,4 +140,21 @@ class SuppressionTest extends TestCase
         $this->assertStringNotContainsString('ana@exemplo.com', $detalhes);
         $this->assertStringNotContainsString(ltrim($contato->telefone, '+'), $detalhes);
     }
+
+    public function test_recusa_de_marketing_global_nao_engole_o_pare_e_a_liberacao_cabe_na_chave(): void
+    {
+        $telefone = '+5521998765432';
+
+        $this->assertTrue(Suppression::suprimir($telefone, Suppression::MOTIVO_RECUSAS, 'resposta', null, Suppression::ESCOPO_MARKETING));
+        $this->assertTrue(Suppression::suprimir($telefone, 'pediu_para_parar', 'resposta', null, Suppression::ESCOPO_TUDO), 'o "pare" é gravado mesmo com a recusa de marketing já existente');
+
+        $this->assertSame(2, Suppression::query()->where('telefone_hash', Telefone::hash($telefone))->count());
+        $this->assertSame('pediu_para_parar', Suppression::bloqueia($telefone, null, null));
+
+        $admin = $this->usuario(Permissions::ROLE_ADMIN);
+        $tudo = Suppression::query()->where('escopo', Suppression::ESCOPO_TUDO)->sole();
+        $tudo->liberar($admin->id, 'falso positivo');
+        $this->assertLessThanOrEqual(120, mb_strlen((string) $tudo->fresh()->chave));
+        $this->assertSame(Suppression::MOTIVO_RECUSAS, Suppression::bloqueia($telefone, null, 'MARKETING'), 'a recusa de marketing continua valendo');
+    }
 }

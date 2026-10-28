@@ -602,6 +602,36 @@ pedidos LGPD com prazo, tratadas), não em Disparos.
 
 ## Histórico de atualizações
 
+### 2026-10-28 - Revisão adversarial do código integrado (3 lentes, 27 achados, 24 corrigidos)
+Decisões e comportamento que mudaram `[decisão]` `[código]`:
+- **Campanha aprovada sem horário espera o "Iniciar"**; só a aprovada com `agendada_para` vencido começa sozinha
+  (a auto-aprovação sempre agenda a espera). Campanha **sem criador registrado** (API/MCP) é tratada como
+  "mesma pessoa": só sai com auto-aprovação (espera e teto). O **hash da aprovação** não conta mais os pulados em
+  execução (opt-out tardio, conversa aberta não são "mudou depois da aprovação").
+- **Quatro olhos na régua sem exceção**: Super Admin também não aprova a própria régua.
+- **Segmento/base/campanha anterior apagados** barram a validação e a montagem (nunca "base inteira"); segmento
+  usado por campanha aberta ou régua não pode ser apagado no painel.
+- **Chave da supressão distingue escopo** (`hash:todos` = tudo; `hash:{sender}`/`hash:marketing` = marketing): uma
+  recusa de marketing nunca engole um "pare". `suppressions.chave` tem 120 chars (liberar acrescenta `#timestamp`).
+- **Régua**: contato em opt-out, anonimizado ou bloqueado para o remetente sai da inscrição (`bloqueado`) antes de
+  qualquer passo, inclusive o texto livre; pedido LGPD encerra como "pediu para parar". Tranche MARKETING conta
+  `enviado_incerto` e grava a espera mesmo quando a leva fechou com timeout.
+- **MARKETING sem `dias_da_semana`** (API) cai nos dias padrão de marketing (seg-sex), não em todos os dias.
+- **Webhook da Kapso**: o tipo do evento vem do corpo assinado; o header só vale sem `event` no corpo. Status da Meta
+  de wamid desconhecido com `pricing.category` conta como template (teto e conversa aberta).
+- **Importação**: telefone anonimizado nunca renasce (CSV, sellers, histórico da Kapso); telefones entram pelo
+  `canonico` (celular antigo ganha o 9 como no webhook, com ou sem DDI); coluna sensível só vai para `documento`
+  ou é ignorada (nem `nome`/`empresa`); denylist curta (`rg`) só casa token inteiro ("cargo" passa); supressão do
+  histórico guarda só a classificação, nunca o texto; paginação para em cursor repetido ou 5000 páginas
+  (`historico.max_paginas`); importação completa e incremental dividem o mutex e há trava por remetente; a lista
+  completa do endpoint de sellers converte quem **não veio mais** (saiu da base, tag `voltou_a_vender`).
+- **Painel**: editar contato sem `view pii` não carrega documento, e-mail, atributos nem telefone completo no estado
+  do formulário (telefone mascarado e travado); editar campanha não carrega a amostra da prévia; prévia da importação
+  mascara `telefone_original` e esconde atributos; busca de bloqueios sem dígitos não casa tudo; o segredo do webhook
+  não sai mais na tela do comando.
+- Descartados como não defeito: `--rapido` coincidindo com a leitura horária (inofensivo), webhooks em simulação
+  processam normalmente (é o desejado), escolha do grupo da tela Conversas.
+
 ### 2026-10-28 - Integração das cinco frentes
 Cinco frentes paralelas (webhooks/API/comandos, importação/anonimização, réguas/suíte do núcleo, painel de
 contatos, painel de disparos/configuração) integradas; 281 testes. Ajustes de contrato na integração:

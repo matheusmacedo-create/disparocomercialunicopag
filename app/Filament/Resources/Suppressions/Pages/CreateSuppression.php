@@ -40,7 +40,7 @@ class CreateSuppression extends CreateRecord
             Notification::make()->warning()->title('Telefone já estava bloqueado')->body('O bloqueio anterior continua valendo; nada foi alterado.')->send();
         }
 
-        return Suppression::query()->where('chave', Suppression::chaveDe((string) $telefone, $senderId))->firstOrFail();
+        return Suppression::query()->where('chave', Suppression::chaveDe((string) $telefone, $senderId, $escopo))->firstOrFail();
     }
 
     protected function getRedirectUrl(): string

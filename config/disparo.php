@@ -138,6 +138,8 @@ return [
 
     'historico' => [
         // Janela da importação incremental da Kapso quando o remetente nunca importou (dias).
+        // Teto de páginas por consulta (proteção contra cursor que não anda).
+        'max_paginas' => 5000,
         'janela_inicial_dias' => (int) env('DISPARO_HISTORICO_JANELA_INICIAL_DIAS', 180),
         'pagina' => 100,
         // Importação incremental recomeça esta folga antes de `historico_importado_ate` (status que mudou tarde).

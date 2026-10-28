@@ -153,6 +153,15 @@ final class ExecutorDeCampanha
             $jaSaiu = (int) $campaign->recipients()->whereIn('status', CampaignRecipient::STATUS_ENVIADOS)->count();
             $limite = min($limite, max(0, $tranche - $jaSaiu));
             $tranche = max(0, $tranche - $jaSaiu);
+
+            // A primeira leva já saiu inteira (inclusive `enviado_incerto`) sem a espera ter sido gravada: grava agora.
+            if ($tranche === 0 && $campaign->tranche_aguardando_ate === null) {
+                $campaign->forceFill(['tranche_aguardando_ate' => now()->addMinutes((int) config('disparo.tranches.espera_minutos', 90))])->save();
+                $campaign->registrarEvento('tranche_enviada', ['enviados' => $jaSaiu, 'espera_minutos' => (int) config('disparo.tranches.espera_minutos', 90)], null);
+                $resultado['parou'] = 'tranche_enviada';
+
+                return $resultado;
+            }
         }
 
         $intervaloMs = (int) ceil(60000 / max(1, $sender->msgs_por_minuto));
@@ -280,6 +289,7 @@ final class ExecutorDeCampanha
                 ])->save();
                 $resultado['enviados']++;
                 $orcamento--;
+                $saidosNaRodada++;
                 $transitoriasSeguidas++;
 
                 if ($transitoriasSeguidas >= (int) config('disparo.guardas.max_transitorias_seguidas', 3)) {

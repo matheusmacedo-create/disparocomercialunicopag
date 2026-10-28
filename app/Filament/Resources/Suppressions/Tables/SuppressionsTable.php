@@ -97,8 +97,10 @@ class SuppressionsTable
                 $q->where('telefone_hash', Telefone::hash($canonico));
             }
 
-            if (Permissions::allows(Permissions::VIEW_PII)) {
-                $q->orWhere('telefone', 'like', '%'.preg_replace('/\D/', '', $search).'%');
+            $digitos = (string) preg_replace('/\D/', '', $search);
+
+            if ($digitos !== '' && Permissions::allows(Permissions::VIEW_PII)) {
+                $q->orWhere('telefone', 'like', '%'.$digitos.'%');
             }
 
             if ($canonico === null && ! Permissions::allows(Permissions::VIEW_PII)) {

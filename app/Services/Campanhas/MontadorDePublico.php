@@ -18,6 +18,7 @@ use App\Services\Segmentos\ConsultaDeSegmento;
 use App\Services\WhatsApp\WhatsAppException;
 use App\Support\Variaveis;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Do público da campanha (listas + segmento - exclusões) aos destinatários, com o motivo de quem fica de
@@ -141,7 +142,13 @@ final class MontadorDePublico
     {
         $publico = (array) ($campaign->publico ?? []);
         $listas = array_values(array_filter(array_map('intval', (array) ($publico['listas'] ?? []))));
-        $segmento = isset($publico['segment_id']) && (int) $publico['segment_id'] > 0 ? Segment::query()->find((int) $publico['segment_id']) : null;
+        $segmentoId = (int) ($publico['segment_id'] ?? 0);
+        $segmento = $segmentoId > 0 ? Segment::query()->find($segmentoId) : null;
+
+        // Segmento apagado depois de montar o público: sem isto o público viraria a base inteira.
+        if ($segmentoId > 0 && $segmento === null) {
+            throw ValidationException::withMessages(['publico' => 'O segmento do público não existe mais: refaça o público e a prévia.']);
+        }
         $anterior = (array) ($publico['campanha_anterior'] ?? []);
 
         // Sem segmento, a base entra inteira: quem está em opt-out ou inválido aparece na prévia como

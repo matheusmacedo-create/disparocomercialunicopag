@@ -172,7 +172,7 @@ class ImportadorKapsoTest extends TestCase
         $this->assertSame(Contact::STATUS_OPTOUT, $maria->status);
         $this->assertSame(Suppression::MOTIVO_HISTORICO, Suppression::bloqueia($maria->telefone, null, null));
         $supressao = Suppression::query()->where('telefone_hash', $maria->telefone_hash)->firstOrFail();
-        $this->assertSame(['historico_kapso', 'wamid.in1', 'nao quero'], [$supressao->origem, $supressao->wamid, $supressao->detalhes]);
+        $this->assertSame(['historico_kapso', 'wamid.in1', 'classificado no histórico como parar'], [$supressao->origem, $supressao->wamid, $supressao->detalhes], 'o texto do cliente não vai para a supressão');
         $this->assertSame($this->agora->subDays(3)->addHour()->toIso8601String(), $supressao->created_at->toIso8601String(), 'criada no momento da resposta');
         $this->assertSame('Maria 🌸', $maria->nome, 'perfil do WhatsApp só preencheu vazio');
         $this->assertSame('Maria', $maria->primeiro_nome);

@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\ContactImport;
 use App\Models\ContactList;
 use App\Models\Suppression;
+use App\Services\Contatos\AnonimizarContato;
 use App\Services\Importacao\ImportadorCsv;
 use App\Services\Importacao\LeitorDeCsv;
 use App\Support\Permissions;
@@ -238,5 +239,30 @@ class ImportadorCsvTest extends TestCase
 
         $this->assertSame(ContactImport::STATUS_FALHOU, $importacao->refresh()->status);
         $this->assertStringContainsString('dado sensível', (string) $importacao->mensagem);
+    }
+
+    public function test_telefone_anonimizado_nao_renasce_e_coluna_sensivel_so_vai_para_documento(): void
+    {
+        Storage::fake('local');
+        $user = $this->usuario(Permissions::ROLE_OPERATOR);
+        $anonimo = Contact::factory()->create(['telefone' => '+5521998765432', 'nome' => 'Ana']);
+        app(AnonimizarContato::class)->pelaRotina($anonimo, 'pedido do titular');
+
+        $arquivo = tempnam(sys_get_temp_dir(), 'csv');
+        file_put_contents($arquivo, "telefone;nome;cargo\n21998765432;Ana de Novo;Gerente\n21 8765-4321;Bia Sem Nove;Dona\n");
+        $mapeamento = ImportadorCsv::sugerirMapeamento(['telefone', 'nome', 'cargo']);
+        $this->assertSame('atributos.cargo', $mapeamento['cargo'], '"cargo" não é "rg"');
+
+        $importacao = ImportadorCsv::criar($arquivo, 'novo.csv', $mapeamento, ['origem' => 'csv', 'tipo_contato' => 'lead'], $user)->refresh();
+
+        $this->assertSame(0, Contact::query()->where('telefone', '+5521998765432')->count(), 'o anonimizado não volta');
+        $this->assertSame(1, $importacao->resultado['bloqueados']);
+        $this->assertNotNull(Contact::query()->where('telefone', '+5521987654321')->first(), 'celular antigo sem o 9 entra com o 9, como no webhook');
+
+        try {
+            ImportadorCsv::exigirMapeamentoValido(['cpf' => 'empresa']);
+            $this->fail('cpf em empresa viraria variável de template');
+        } catch (ValidationException) {
+        }
     }
 }

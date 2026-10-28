@@ -21,6 +21,9 @@ class EditCampaign extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        // A prévia gravada (amostra com nomes/telefones e variáveis) não é do formulário e sairia no snapshot.
+        unset($data['simulacao'], $data['aprovacao_hash']);
+
         return CampaignForm::aoPreencher($data);
     }
 

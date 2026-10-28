@@ -34,7 +34,7 @@ class RegistrarWebhookTest extends TestCase
         $novo = (string) $sender->webhook_secret;
         $this->assertNotSame('segredo-antigo', $novo);
         $this->assertSame(48, strlen($novo));
-        $this->assertStringContainsString($novo, $saida);
+        $this->assertStringNotContainsString($novo, $saida, 'o segredo não aparece na saída (ficaria no histórico do Forge)');
         $this->assertStringContainsString(route('webhooks.kapso', ['webhookKey' => $sender->webhook_key]), $saida);
 
         Http::assertSent(function (Request $request) use ($sender, $novo): bool {

@@ -125,12 +125,27 @@ class Campaign extends Model
         return $this->simulacao !== null && $this->simulacao_hash === $this->hashDoEnvio();
     }
 
-    /** Dias da semana permitidos (1 = segunda ... 7 = domingo). */
+    /**
+     * Dias da semana permitidos (1 = segunda ... 7 = domingo). Vazio: MARKETING cai nos dias padrão de
+     * marketing (`guardas.dias_marketing`, seg-sex), venha a campanha do painel ou da API; o resto, todos.
+     */
     public function diasDaSemana(): array
     {
         $dias = array_values(array_filter(array_map('intval', (array) $this->regra('dias_da_semana', []))));
 
-        return $dias === [] ? [1, 2, 3, 4, 5, 6, 7] : $dias;
+        if ($dias !== []) {
+            return $dias;
+        }
+
+        $categoria = strtoupper((string) ($this->template_categoria ?: MessageTemplate::query()->where('sender_id', $this->sender_id)->where('nome', $this->template_nome)->where('idioma', $this->template_idioma)->value('categoria')));
+
+        if ($categoria === Sender::CATEGORIA_MARKETING) {
+            $padrao = array_values(array_filter(array_map('intval', (array) config('disparo.guardas.dias_marketing', [1, 2, 3, 4, 5]))));
+
+            return $padrao === [] ? [1, 2, 3, 4, 5, 6, 7] : $padrao;
+        }
+
+        return [1, 2, 3, 4, 5, 6, 7];
     }
 
     public function sender(): BelongsTo
@@ -201,14 +216,17 @@ class Campaign extends Model
         return $this->status === self::STATUS_EM_ANDAMENTO;
     }
 
-    /** Pode começar a rodar agora: em andamento, ou aprovada com o horário agendado vencido (ou sem agendamento). */
+    /**
+     * Pode começar a rodar agora: em andamento, ou aprovada com horário agendado já vencido. Aprovada SEM
+     * horário espera alguém clicar em "Iniciar" (é o que o painel promete); a auto-aprovação sempre agenda.
+     */
     public function prontaParaRodar(): bool
     {
         if ($this->status === self::STATUS_EM_ANDAMENTO) {
             return true;
         }
 
-        return $this->status === self::STATUS_APROVADA && ($this->agendada_para === null || $this->agendada_para->lte(now()));
+        return $this->status === self::STATUS_APROVADA && $this->agendada_para !== null && $this->agendada_para->lte(now());
     }
 
     public function regra(string $chave, mixed $padrao = null): mixed
@@ -246,8 +264,9 @@ class Campaign extends Model
         $template ??= MessageTemplate::query()->where('sender_id', $this->sender_id)->where('nome', $this->template_nome)->where('idioma', $this->template_idioma)->first();
 
         return hash('sha256', json_encode([
+            // Só o que foi materializado na aprovação: o executor pula destinatários em tempo de execução
+            // (opt-out tardio, conversa aberta) e isso não é "mudou depois da aprovação".
             'destinatarios' => (int) $this->recipients()->count(),
-            'pendentes_ou_saidos' => (int) $this->recipients()->whereNotIn('status', [CampaignRecipient::STATUS_PULADO])->count(),
             'template' => [$this->template_nome, $this->template_idioma, strtoupper((string) $template?->categoria), strtoupper((string) $template?->status)],
             'variaveis' => $this->variaveis,
             'regras' => $this->regras,

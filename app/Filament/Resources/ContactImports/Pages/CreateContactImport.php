@@ -424,9 +424,10 @@ class CreateContactImport extends CreateRecord
         }
 
         return match ($campo) {
-            'telefone' => Pii::telefone($texto),
+            'telefone', 'telefone_original' => Pii::telefone($texto),
             'documento' => (string) Pii::documento($texto),
             'email' => (string) Pii::email($texto),
+            'atributos' => $texto === '' || $texto === '[]' || $texto === 'null' ? '' : '(atributos: só com permissão de dados pessoais)',
             default => $texto,
         };
     }

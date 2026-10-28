@@ -31,7 +31,7 @@ use Throwable;
  *  - coluna sensível (cpf, cnpj, documento, rg, endereco, nascimento, renda, senha) só vai para campo
  *    tipado (`documento`, criptografado) ou é ignorada - nunca para `atributos`, que viram variável de
  *    template e ficam em claro (achado de LGPD de 28/10);
- *  - telefone normalizado ({@see Telefone::normalizar()}); inválido é rejeitado, repetido no arquivo também;
+ *  - telefone canônico ({@see Telefone::canonico()}: celular antigo sem o 9 ganha o 9, como no webhook); inválido é rejeitado, repetido no arquivo também;
  *  - telefone já existente ATUALIZA: nome pela precedência das fontes (vazio não apaga), atributos fazem
  *    merge (chaves minúsculas), consentimento só preenche vazio; `optout`/`anonimizado` entra na base e
  *    segue bloqueado;
@@ -208,6 +208,12 @@ final class ImportadorCsv
                 } elseif (self::sensivel(self::normalizarNome($coluna)) || self::sensivel(self::normalizarNome($chave))) {
                     $problemas[] = sprintf('A coluna "%s" contém dado sensível: só pode ir para "documento" ou ser ignorada, nunca para atributos (viram variável de template e ficam em claro).', $coluna);
                 }
+
+                continue;
+            }
+
+            if ($campo !== 'documento' && self::sensivel(self::normalizarNome($coluna))) {
+                $problemas[] = sprintf('A coluna "%s" contém dado sensível: só pode ir para "documento" ou ser ignorada.', $coluna);
 
                 continue;
             }
@@ -452,6 +458,11 @@ final class ImportadorCsv
         $contato = Contact::query()->where('telefone', $dados['telefone'])->first();
         $novo = $contato === null;
 
+        // Direito de exclusão exercido: a planilha não recria a pessoa; o número segue bloqueado.
+        if ($novo && Suppression::bloqueia($dados['telefone'], null, null) === Suppression::MOTIVO_ANONIMIZADO) {
+            return ['novo' => false, 'bloqueado' => true, 'sem_consentimento' => false, 'documento_invalido' => false, 'email_invalido' => false];
+        }
+
         if ($novo) {
             $contato = new Contact([
                 'telefone' => $dados['telefone'],
@@ -558,7 +569,7 @@ final class ImportadorCsv
 
             if ($campo === self::CAMPO_TELEFONE) {
                 $dados['telefone_original'] = $valor;
-                $dados['telefone'] = Telefone::normalizar($valor);
+                $dados['telefone'] = Telefone::canonico($valor);
 
                 continue;
             }
@@ -633,7 +644,20 @@ final class ImportadorCsv
         foreach ((array) config('disparo.importacao.denylist', []) as $palavra) {
             $palavra = self::normalizarNome((string) $palavra);
 
-            if ($palavra !== '' && (str_contains($nomeNormalizado, $palavra) || str_contains($compacto, str_replace(' ', '', $palavra)))) {
+            if ($palavra === '') {
+                continue;
+            }
+
+            // Palavra curta (rg, cpf) só como token inteiro: "cargo", "orgao" e "margem" não são sensíveis.
+            if (mb_strlen($palavra) <= 3) {
+                if (preg_match('/(^|[^a-z0-9])'.preg_quote($palavra, '/').'($|[^a-z0-9])/u', $nomeNormalizado) === 1 || $compacto === $palavra) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (str_contains($nomeNormalizado, $palavra) || str_contains($compacto, str_replace(' ', '', $palavra))) {
                 return true;
             }
         }

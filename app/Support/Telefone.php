@@ -57,7 +57,20 @@ final class Telefone
             return $normal;
         }
 
-        $formas = self::formas((string) $bruto);
+        // Celular antigo sem o nono dígito, com ou sem DDI ("21 8765-4321", "+55 21 8765-4321"): formas()
+        // só reconhece a forma nacional com 55 na frente, então completa como normalizar() faria.
+        $bruto = trim((string) $bruto);
+        $digitos = preg_replace('/\D/', '', $bruto) ?? '';
+
+        if (! str_starts_with($bruto, '+')) {
+            $digitos = str_starts_with($digitos, '00') ? substr($digitos, 2) : ltrim($digitos, '0');
+
+            if (strlen($digitos) === 10) {
+                $digitos = '55'.$digitos;
+            }
+        }
+
+        $formas = self::formas($digitos);
 
         // formas() devolve [cru, com o 9] para celular antigo sem o nono dígito.
         return count($formas) === 2 ? self::normalizar($formas[1]) : null;

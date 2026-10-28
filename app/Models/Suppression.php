@@ -120,9 +120,18 @@ class Suppression extends Model
         return [self::ESCOPO_TUDO => 'Tudo (qualquer template, todos os remetentes)', self::ESCOPO_MARKETING => 'Só marketing'];
     }
 
-    public static function chaveDe(string $telefoneE164, ?int $senderId): string
+    /**
+     * `hash:todos` = escopo tudo; `hash:{sender}` = marketing daquele remetente; `hash:marketing` = marketing
+     * global (recusas repetidas). Escopos diferentes nunca dividem a chave: um "pare" nunca é engolido por
+     * uma recusa de marketing já gravada.
+     */
+    public static function chaveDe(string $telefoneE164, ?int $senderId, string $escopo = self::ESCOPO_TUDO): string
     {
-        return Telefone::hash($telefoneE164).':'.($senderId ?? 'todos');
+        if ($escopo === self::ESCOPO_TUDO) {
+            return Telefone::hash($telefoneE164).':todos';
+        }
+
+        return Telefone::hash($telefoneE164).':'.($senderId ?? 'marketing');
     }
 
     /**
@@ -147,7 +156,7 @@ class Suppression extends Model
 
         // createOrFirst: webhook e painel no mesmo segundo não estouram a chave única.
         $registro = self::query()->createOrFirst(
-            ['chave' => self::chaveDe($telefoneE164, $senderId)],
+            ['chave' => self::chaveDe($telefoneE164, $senderId, $escopo)],
             [
                 'telefone_hash' => Telefone::hash($telefoneE164),
                 'telefone' => $telefoneE164,

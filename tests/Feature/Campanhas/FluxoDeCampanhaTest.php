@@ -9,10 +9,13 @@ use App\Models\CampaignRecipient;
 use App\Models\Contact;
 use App\Models\ContactList;
 use App\Models\MessageTemplate;
+use App\Models\Segment;
 use App\Models\Sender;
 use App\Models\Suppression;
 use App\Models\WhatsappMessage;
 use App\Services\Campanhas\FluxoDeCampanha;
+use App\Services\Campanhas\MontadorDePublico;
+use App\Services\Campanhas\ValidadorDeCampanha;
 use App\Services\Envio\ExecutorDeCampanha;
 use App\Services\Envio\Guardas;
 use App\Support\Permissions;
@@ -260,5 +263,67 @@ class FluxoDeCampanhaTest extends TestCase
 
         $this->expectException(MassAssignmentException::class);
         $campanha->fill(['status' => Campaign::STATUS_APROVADA, 'aprovado_por' => 1]);
+    }
+
+    public function test_destinatario_pulado_em_execucao_nao_invalida_a_aprovacao(): void
+    {
+        $campanha = $this->campanha();
+        $campanha->forceFill(['status' => Campaign::STATUS_APROVADA, 'agendada_para' => now()->subMinute()])->save();
+        foreach (Contact::factory()->count(3)->create() as $contato) {
+            CampaignRecipient::query()->create(['campaign_id' => $campanha->id, 'contact_id' => $contato->id, 'telefone' => $contato->telefone, 'status' => CampaignRecipient::STATUS_PENDENTE]);
+        }
+        $hash = $campanha->hashDaAprovacao();
+
+        $campanha->recipients()->first()->forceFill(['status' => CampaignRecipient::STATUS_PULADO, 'motivo' => 'optout'])->save();
+
+        $this->assertSame($hash, $campanha->refresh()->hashDaAprovacao(), 'pular em tempo de execução não é "mudou depois da aprovação"');
+    }
+
+    public function test_campanha_sem_criador_registrado_exige_auto_aprovacao(): void
+    {
+        $this->fakeKapso();
+        $admin = $this->usuario(Permissions::ROLE_ADMIN);
+        $campanha = $this->campanha();
+        $this->assertNull($campanha->criado_por);
+        $fluxo = app(FluxoDeCampanha::class);
+        $previa = $fluxo->simular($campanha, $admin);
+        $fluxo->enviarParaAprovacao($campanha->refresh(), $admin);
+
+        try {
+            $fluxo->aprovar($campanha->refresh(), $admin, $previa['elegiveis']);
+            $this->fail('sem criador ninguém garante que o aprovador é outra pessoa');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('aprovacao', $e->errors());
+        }
+
+        $fluxo->aprovar($campanha->refresh(), $admin, $previa['elegiveis'], autoAprovacao: true);
+        $this->assertSame(Campaign::STATUS_APROVADA, $campanha->refresh()->status);
+        $this->assertNotNull($campanha->agendada_para, 'auto-aprovação sempre agenda a espera');
+    }
+
+    public function test_segmento_apagado_depois_de_montar_o_publico_barra_a_validacao_e_a_montagem(): void
+    {
+        $segmento = Segment::query()->create(['nome' => 'Leads de outubro', 'regras' => ['status' => ['ativo']]]);
+        $campanha = $this->campanha(['publico' => ['segment_id' => $segmento->id]]);
+        $segmento->delete();
+
+        $problemas = app(ValidadorDeCampanha::class)->problemas($campanha->refresh());
+        $this->assertNotEmpty(array_filter($problemas, fn (string $p): bool => str_contains($p, 'segmento')));
+
+        try {
+            app(MontadorDePublico::class)->queryDoPublico($campanha);
+            $this->fail('o público nunca pode virar a base inteira');
+        } catch (ValidationException) {
+        }
+    }
+
+    public function test_aprovada_sem_horario_espera_o_iniciar(): void
+    {
+        $campanha = $this->campanha();
+        $campanha->forceFill(['status' => Campaign::STATUS_APROVADA, 'agendada_para' => null])->save();
+        $this->assertFalse($campanha->prontaParaRodar());
+
+        $campanha->forceFill(['agendada_para' => now()->subMinute()])->save();
+        $this->assertTrue($campanha->prontaParaRodar());
     }
 }

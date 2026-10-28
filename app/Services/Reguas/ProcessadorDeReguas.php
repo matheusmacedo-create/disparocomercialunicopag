@@ -12,6 +12,7 @@ use App\Models\MessageTemplate;
 use App\Models\Segment;
 use App\Models\Sender;
 use App\Models\SenderEvent;
+use App\Models\Suppression;
 use App\Models\WhatsappMessage;
 use App\Services\DiscordNotifier;
 use App\Services\Envio\Despachante;
@@ -335,6 +336,15 @@ final class ProcessadorDeReguas
 
         if ($contato === null) {
             $inscricao->encerrar(JourneyEnrollment::STATUS_FALHOU, 'contato_inexistente');
+            $resultado['encerradas']++;
+
+            return null;
+        }
+
+        // Opt-out, anonimização ou bloqueio para este remetente encerram a inscrição antes de qualquer passo
+        // (inclusive o texto livre, que não passa pelas guardas de template).
+        if (! $contato->ativo() || Suppression::bloqueia($contato->telefone, $sender, null) !== null) {
+            $inscricao->encerrar(JourneyEnrollment::STATUS_SAIU, 'bloqueado');
             $resultado['encerradas']++;
 
             return null;

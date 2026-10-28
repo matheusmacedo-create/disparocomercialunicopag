@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Resources\Contacts\Pages\CreateContact;
+use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Models\Contact;
@@ -232,5 +233,21 @@ class ContatosPanelTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas('contacts', ['telefone' => '+5511988887777', 'primeiro_nome' => 'Novo']);
+    }
+
+    public function test_editar_sem_view_pii_nao_carrega_documento_email_nem_telefone_completo_no_formulario(): void
+    {
+        $this->contato->forceFill(['documento' => '12345678909', 'atributos' => ['oferta' => 'taxa zero secreta']])->save();
+        $this->actingAs($this->usuario(Permissions::ROLE_OPERATOR));
+
+        $html = Livewire::test(EditContact::class, ['record' => $this->contato->getRouteKey()])
+            ->assertOk()
+            ->assertDontSee('ana@exemplo.com')
+            ->assertDontSee('12345678909')
+            ->assertDontSee('taxa zero secreta')
+            ->assertDontSee('5521998765432')
+            ->html();
+
+        $this->assertStringNotContainsString('123.456.789-09', $html);
     }
 }

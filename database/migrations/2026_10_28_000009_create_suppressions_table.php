@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('telefone', 20)->nullable();
             $table->foreignId('sender_id')->nullable()->constrained('senders')->cascadeOnDelete();
             // hash + ':' + (sender_id | 'todos')
-            $table->string('chave', 80)->unique();
+            $table->string('chave', 120)->unique();
             // tudo | marketing
             $table->string('escopo', 15)->default('tudo');
             // pediu_para_parar | denunciou | meta_marketing_stopped | manual | importacao | historico | anonimizado

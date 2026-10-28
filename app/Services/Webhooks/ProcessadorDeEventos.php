@@ -217,7 +217,8 @@ final class ProcessadorDeEventos
             'contact_id' => $contato?->id,
             'telefone' => $telefone,
             'direcao' => WhatsappMessage::OUTBOUND,
-            'tipo' => $evento->tipoMensagem ?? ($evento->templateNome !== null ? WhatsappMessage::TIPO_TEMPLATE : null),
+            // Status da Meta não traz o tipo: conversa iniciada pela empresa (pricing.category) só pode ser template.
+            'tipo' => $evento->tipoMensagem ?? ($evento->templateNome !== null || in_array(strtoupper((string) $evento->categoria), ['MARKETING', 'UTILITY', 'AUTHENTICATION'], true) ? WhatsappMessage::TIPO_TEMPLATE : null),
             'template_nome' => $evento->templateNome,
             'status' => $evento->status === WhatsappMessage::STATUS_FAILED ? WhatsappMessage::STATUS_FAILED : $evento->status,
             'codigo_erro' => $evento->codigoErro,
@@ -387,7 +388,7 @@ final class ProcessadorDeEventos
         }
 
         if ($template->journey_enrollment_id !== null && ($inscricao = JourneyEnrollment::query()->with('journey')->find($template->journey_enrollment_id)) !== null && $inscricao->status === JourneyEnrollment::STATUS_ATIVA) {
-            if ($classificacao === ClassificadorDeResposta::PARAR) {
+            if ($classificacao === ClassificadorDeResposta::PARAR || $classificacao === ClassificadorDeResposta::PEDIDO_LGPD) {
                 $inscricao->encerrar(JourneyEnrollment::STATUS_SAIU, 'pediu_para_parar');
             } elseif ($inscricao->journey?->sair_ao_responder && $classificacao !== ClassificadorDeResposta::NAO_AGORA) {
                 $proximo = $inscricao->journey->steps()->where('ordem', $inscricao->passo_atual)->first();

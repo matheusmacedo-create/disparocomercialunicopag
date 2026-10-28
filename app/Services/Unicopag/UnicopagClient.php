@@ -66,7 +66,7 @@ class UnicopagClient
 
             return [
                 'existe' => true,
-                'telefone' => $bruto !== null ? Telefone::normalizar($bruto) : null,
+                'telefone' => $bruto !== null ? Telefone::canonico($bruto) : null,
                 'nome' => Contact::nomeHigienizado(self::primeiro($cadastro, self::CHAVES_DE_NOME)),
                 'empresa' => Contact::nomeHigienizado(self::primeiro($cadastro, self::CHAVES_DE_EMPRESA)),
             ];

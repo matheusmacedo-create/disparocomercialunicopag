@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Contacts\Schemas;
 
+use App\Filament\Support\Pii;
 use App\Models\Contact;
 use App\Support\Permissions;
 use App\Support\Telefone;
@@ -32,7 +33,7 @@ class ContactForm
                             ->tel()
                             ->required()
                             ->placeholder('+55 21 99876-5432')
-                            ->helperText('DDD + número. Fica guardado em E.164 (+5521998765432).')
+                            ->helperText('DDD + número. Fica guardado em E.164 (+5511912345678).')
                             ->rules([
                                 fn (?Contact $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
                                     $normal = Telefone::normalizar((string) $value);
@@ -55,7 +56,10 @@ class ContactForm
                                 },
                             ])
                             ->dehydrateStateUsing(fn (mixed $state): mixed => Telefone::normalizar((string) $state) ?? $state)
-                            ->disabled(fn (?Contact $record): bool => $record?->anonimizado() ?? false),
+                            // Editar sem `view pii`: o número aparece mascarado, travado e não é regravado.
+                            ->formatStateUsing(fn (?string $state, string $operation): ?string => $operation === 'edit' && ! Permissions::allows(Permissions::VIEW_PII) && filled($state) ? Pii::telefone($state) : $state)
+                            ->dehydrated(fn (string $operation): bool => $operation === 'create' || Permissions::allows(Permissions::VIEW_PII))
+                            ->disabled(fn (?Contact $record, string $operation): bool => ($record?->anonimizado() ?? false) || ($operation === 'edit' && ! Permissions::allows(Permissions::VIEW_PII))),
                         TextInput::make('nome')->label('Nome')->maxLength(255),
                         TextInput::make('empresa')->label('Empresa / loja')->maxLength(255),
                         TextInput::make('email')

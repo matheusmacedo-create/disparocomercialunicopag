@@ -14,6 +14,7 @@ use App\Models\MessageTemplate;
 use App\Models\Segment;
 use App\Models\Sender;
 use App\Models\SenderEvent;
+use App\Models\Suppression;
 use App\Models\Tag;
 use App\Models\WhatsappMessage;
 use App\Services\Envio\Guardas;
@@ -385,15 +386,15 @@ class ProcessadorDeReguasTest extends TestCase
         $journey = $this->regua([$this->template(), ['tipo' => JourneyStep::TIPO_AGUARDAR, 'aguardar_horas' => 1]]);
         $parado = Contact::factory()->create();
         $inscricao = $journey->inscrever($parado, 'manual');
-        $parado->marcarOptout('pediu_para_parar', 'resposta');
+        $parado->marcarSemWhatsApp();
 
         $resultado = app(ProcessadorDeReguas::class)->rodar();
 
         $this->assertSame(0, $resultado['enviados']);
         $this->assertSame(1, $resultado['pulados']);
         $inscricao->refresh();
-        $this->assertSame(Guardas::OPTOUT, $inscricao->ultimo_motivo);
-        $this->assertSame(Guardas::OPTOUT, $inscricao->passos_pulados[0]['motivo']);
+        $this->assertSame(Guardas::SEM_WHATSAPP, $inscricao->ultimo_motivo);
+        $this->assertSame(Guardas::SEM_WHATSAPP, $inscricao->passos_pulados[0]['motivo']);
         $this->assertSame(JourneyEnrollment::STATUS_ATIVA, $inscricao->status);
         $this->assertSame(2, $inscricao->passo_atual + 0 - 1, 'o aguardar rodou e aponta para o fim');
         Http::assertNothingSent();
@@ -439,5 +440,25 @@ class ProcessadorDeReguasTest extends TestCase
         $this->assertFalse($outra->converter('kyc'));
         $this->assertSame(JourneyEnrollment::STATUS_ATIVA, $outra->fresh()->status);
         $this->assertSame('kyc', $outra->fresh()->conversao_origem);
+    }
+
+    public function test_contato_em_optout_ou_bloqueado_sai_da_regua_antes_de_qualquer_passo_inclusive_texto(): void
+    {
+        $journey = $this->regua([['tipo' => JourneyStep::TIPO_AGUARDAR, 'aguardar_horas' => 1], ['tipo' => JourneyStep::TIPO_TEXTO, 'variaveis' => ['texto' => 'Oi, segue o link']]]);
+        $optout = Contact::factory()->create(['ultima_resposta_em' => now()]);
+        $bloqueado = Contact::factory()->create(['ultima_resposta_em' => now()]);
+        $inscricaoOptout = $journey->inscrever($optout, 'manual');
+        $inscricaoBloqueado = $journey->inscrever($bloqueado, 'manual');
+        $optout->marcarOptout('pediu_para_parar', 'resposta');
+        Suppression::suprimir($bloqueado->telefone, 'manual', 'painel');
+        $bloqueado->forceFill(['status' => Contact::STATUS_ATIVO])->save();
+
+        $resultado = app(ProcessadorDeReguas::class)->rodar();
+
+        $this->assertSame(0, $resultado['textos']);
+        $this->assertSame(2, $resultado['encerradas']);
+        $this->assertSame(['saiu', 'bloqueado'], [$inscricaoOptout->refresh()->status, $inscricaoOptout->motivo_saida]);
+        $this->assertSame(['saiu', 'bloqueado'], [$inscricaoBloqueado->refresh()->status, $inscricaoBloqueado->motivo_saida]);
+        $this->assertSame(0, WhatsappMessage::query()->where('tipo', WhatsappMessage::TIPO_TEXTO)->count());
     }
 }

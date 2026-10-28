@@ -58,9 +58,10 @@ final class KapsoWebhookController extends Controller
         }
 
         $corpo = NormalizadorKapso::mapa(json_decode($corpoCru, true));
-        $evento = NormalizadorKapso::texto($request->header('X-Webhook-Event'))
-            ?: NormalizadorKapso::texto($corpo['event'] ?? null)
-            ?: NormalizadorKapso::texto($corpo['type'] ?? null);
+        // O corpo é o que está assinado: o header só vale quando o corpo não diz o evento.
+        $evento = NormalizadorKapso::texto($corpo['event'] ?? null)
+            ?: NormalizadorKapso::texto($corpo['type'] ?? null)
+            ?: NormalizadorKapso::texto($request->header('X-Webhook-Event'));
         $evento = $evento !== '' ? $evento : null;
 
         // Com buffer ligado na Kapso, vários payloads do mesmo evento chegam juntos.

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Campanhas;
 
 use App\Models\Campaign;
+use App\Models\ContactList;
 use App\Models\MessageTemplate;
+use App\Models\Segment;
 use App\Models\Sender;
 use App\Support\Variaveis;
 
@@ -117,6 +119,21 @@ final class ValidadorDeCampanha
 
         if (! $temPublico) {
             $problemas[] = 'Defina o público: pelo menos uma base, um segmento ou uma campanha anterior. Campanha sem público não existe (seria a base inteira).';
+        }
+
+        // Referência apagada depois de montar o público (segmento, base, campanha anterior) não pode passar.
+        if ((int) ($publico['segment_id'] ?? 0) > 0 && ! Segment::query()->whereKey((int) $publico['segment_id'])->exists()) {
+            $problemas[] = 'O segmento do público não existe mais: escolha outro.';
+        }
+
+        $listas = array_values(array_filter(array_map('intval', (array) ($publico['listas'] ?? []))));
+
+        if ($listas !== [] && ContactList::query()->whereIn('id', $listas)->count() !== count($listas)) {
+            $problemas[] = 'Uma das bases do público não existe mais: refaça o público.';
+        }
+
+        if ((int) (($publico['campanha_anterior'] ?? [])['campaign_id'] ?? 0) > 0 && ! Campaign::query()->whereKey((int) $publico['campanha_anterior']['campaign_id'])->exists()) {
+            $problemas[] = 'A campanha anterior do público não existe mais.';
         }
 
         if ((int) $campaign->prioridade < 1 || (int) $campaign->prioridade > 9) {

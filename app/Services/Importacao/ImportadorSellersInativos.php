@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\ContactImport;
 use App\Models\ContactList;
 use App\Models\JourneyEnrollment;
+use App\Models\Suppression;
 use App\Models\Tag;
 use App\Services\Unicopag\UnicopagClient;
 use App\Support\Mask;
@@ -115,7 +116,7 @@ final class ImportadorSellersInativos
 
                 $vistos[$accountId] = true;
 
-                $telefone = Telefone::normalizar(self::texto($seller, ['telefone', 'phone', 'whatsapp', 'celular', 'phone_number']));
+                $telefone = Telefone::canonico(self::texto($seller, ['telefone', 'phone', 'whatsapp', 'celular', 'phone_number']));
                 $nome = self::texto($seller, ['nome', 'name', 'primeiro_nome', 'first_name']);
                 $empresa = self::texto($seller, ['empresa', 'loja', 'trade_name', 'nome_fantasia', 'store_name']);
 
@@ -143,6 +144,24 @@ final class ImportadorSellersInativos
                 $extra['convertidos'] += $resultado['converteu'] ? 1 : 0;
                 $extra['inscricoes_encerradas'] += $resultado['inscricoes'];
                 $extra['destinatarios_convertidos'] += $resultado['destinatarios'];
+            }
+
+            // Lista completa do endpoint: quem está na base e não veio mais na lista voltou a vender (ou saiu
+            // do recorte): converte e sai da base, como se tivesse vindo com etapa de venda.
+            if (($parametros['fonte'] ?? null) === 'endpoint' && $contagem['total_linhas'] > 0) {
+                $tag = Tag::query()->firstOrCreate(['nome' => self::TAG_VOLTOU_A_VENDER]);
+
+                foreach ($lista->contacts()->whereNotNull('account_id')->get() as $ausente) {
+                    if (isset($vistos[(string) $ausente->account_id]) || $ausente->anonimizado()) {
+                        continue;
+                    }
+
+                    $resultado = DB::transaction(fn (): array => $this->converter($ausente, now()->toImmutable(), $lista, $tag));
+                    $extra['convertidos']++;
+                    $extra['ausentes_convertidos'] = ($extra['ausentes_convertidos'] ?? 0) + 1;
+                    $extra['inscricoes_encerradas'] += $resultado['inscricoes'];
+                    $extra['destinatarios_convertidos'] += $resultado['destinatarios'];
+                }
             }
 
             $extra['rejeitadas'] = $rejeitadas->fechar();
@@ -183,6 +202,11 @@ final class ImportadorSellersInativos
 
         $contato = Contact::query()->where('telefone', $telefone)->first();
         $novo = $contato === null;
+
+        if ($novo && Suppression::bloqueia($telefone, null, null) === Suppression::MOTIVO_ANONIMIZADO) {
+            // Direito de exclusão exercido: a conta não volta a ser vinculada à pessoa.
+            return ['novo' => false, 'converteu' => false, 'inscricoes' => 0, 'destinatarios' => 0];
+        }
 
         if ($novo) {
             $contato = new Contact([

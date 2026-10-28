@@ -67,12 +67,16 @@ Schedule::command('disparo:sincronizar-templates')
 // andamento, para o teto e a conversa aberta enxergarem o que sai pelo painel da Kapso ou pelo KYC no
 // mesmo número. O comando é da frente de importação.
 Schedule::command('disparo:importar-historico-kapso --todos')
+    ->name('disparo:importar-historico-kapso')
     ->timezone($fuso)
     ->dailyAt('03:00')
     ->withoutOverlapping(120)
     ->appendOutputTo($log);
 
+// Mesmo nome da completa: as duas dividem o mutex e nunca correm juntas sobre o mesmo remetente (03:00 é
+// múltiplo de 15).
 Schedule::command('disparo:importar-historico-kapso --todos --incremental')
+    ->name('disparo:importar-historico-kapso')
     ->timezone($fuso)
     ->everyFifteenMinutes()
     ->when(fn (): bool => Campaign::query()->where('status', Campaign::STATUS_EM_ANDAMENTO)->exists())

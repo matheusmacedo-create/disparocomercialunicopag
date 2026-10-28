@@ -102,7 +102,8 @@ final class FluxoDeCampanha
             throw ValidationException::withMessages(['destinatarios' => sprintf('Digite o número de destinatários da prévia (%d) para confirmar.', $elegiveis)]);
         }
 
-        $mesmaPessoa = $campaign->criado_por !== null && $campaign->criado_por === $user->id;
+        // Sem criador registrado (API/MCP) ninguém garante que o aprovador é outra pessoa: vale a auto-aprovação.
+        $mesmaPessoa = $campaign->criado_por === null || $campaign->criado_por === $user->id;
         $espera = 0;
 
         if ($mesmaPessoa) {
