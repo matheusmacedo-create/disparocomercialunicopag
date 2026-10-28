@@ -50,11 +50,16 @@ Testes: `composer test` (PHPUnit; Kapso e Meta sempre por `Http::fake`). Estilo:
 | `disparo:processar-reguas` | passos vencidos das réguas (a cada 10 min); `--segmentos` reavalia gatilhos |
 | `disparo:sincronizar-remetentes` | qualidade, tier e saúde dos números (de hora em hora; `--rapido` a cada 10 min com campanha rodando) |
 | `disparo:sincronizar-templates` | cache dos templates da Meta |
-| `disparo:importar-historico-kapso {sender}` | histórico de conversas, mensagens e broadcasts da Kapso |
-| `disparo:importar-csv`, `disparo:importar-sellers-inativos` | bases |
+| `disparo:importar-historico-kapso {sender?} [--todos] [--desde=] [--ate=] [--incremental] [--contatos] [--broadcasts]` | histórico de conversas, mensagens (só metadados) e broadcasts da Kapso (03:00 e, com campanha rodando, a cada 15 min) |
+| `disparo:importar-csv {arquivo}`, `disparo:importar-sellers-inativos [--arquivo=] [--dias=90]` | bases (CSV da UnicoDrop/planilhas; sellers inativos do unico-api, com base viva) |
 | `disparo:registrar-webhook {sender}` | gera o segredo e cadastra o webhook na Kapso |
+| `disparo:registrar-numero {sender} {etapa}` | registro do número na Cloud API direta (status, solicitar, verificar, registrar) |
 | `disparo:diagnostico` | cron, worker, interruptor, pepper, remetentes, webhooks |
-| `disparo:podar` | retenção (LGPD) |
+| `disparo:podar` | retenção (LGPD): conteúdo > 180 d, leads parados > 12 meses, exportações, webhook_calls |
+
+API `/api/v1` (header `X-API-Key`): `health`, `suppressions` (GET/POST, compartilhada com o KYC), `senders/{id}/templates`,
+`contacts/{telefone}` (mascarado), `campaigns` (só rascunho; aprovar e iniciar são do painel). Webhooks:
+`POST /api/webhooks/kapso/{webhook_key}` e `GET|POST /api/webhooks/meta`.
 
 Deploy: `doc/DEPLOY_FORGE.md` e `deploy/forge-deploy.sh`.
 

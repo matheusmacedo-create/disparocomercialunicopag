@@ -385,7 +385,7 @@ outbound do remetente, de qualquer data, ou há template ao telefone nos último
 - No histórico importado a mesma classificação vale, com o contexto (mensagem citada ou template nos 7
   dias anteriores); sem contexto só o inequívoco bloqueia.
 
-## 7. Importação do histórico da Kapso `[inferido]`
+## 7. Importação do histórico da Kapso `[código]` `[inferido]`
 
 Endpoints lidos na documentação pública em 28/10/2026 (não rodados contra a conta ainda):
 `GET /meta/whatsapp/v24.0/{phone_number_id}/conversations?fields=kapso(default)&last_active_since=`,
@@ -519,6 +519,15 @@ campanhas e réguas sem aprovar, conversas; sem PII, sem remetentes), Visualizad
 aparece com `Permissions::allows(...)` e é checada de novo no servidor; o Filament recusa chamar ação
 escondida; `status` das campanhas e réguas não é campo de formulário.
 
+Matriz de PII do painel (`App\Filament\Support\Pii`): telefone mascarado em toda lista e ficha sem `view
+pii` (busca por telefone funciona mesmo assim, por hash e pela forma sem nono dígito); CPF/CNPJ sempre
+pelo `Mask::documento`; e-mail, atributos, variáveis renderizadas e amostra da prévia só com `view pii`;
+texto do cliente (inbound) só com `view conversations`; "Baixar rejeitadas" e a exportação CSV da
+campanha com telefone em claro exigem `view pii` (sem ele o CSV sai mascarado). Busca global desligada.
+Usuário nunca é apagado: é desativado (`users.ativo`, `canAccessPanel` exige ativo); ninguém edita o
+próprio papel nem se desativa. Conversas fica no grupo Contatos (balcão de respostas: sem tratamento,
+pedidos LGPD com prazo, tratadas), não em Disparos.
+
 ## 13. Em aberto
 
 - **Dono do número comercial**: decidir entre (A) o KYC mandar os avisos pela `/api/v1` desta plataforma e
@@ -592,6 +601,15 @@ escondida; `status` das campanhas e réguas não é campo de formulário.
   nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
 
 ## Histórico de atualizações
+
+### 2026-10-28 - Integração das cinco frentes
+Cinco frentes paralelas (webhooks/API/comandos, importação/anonimização, réguas/suíte do núcleo, painel de
+contatos, painel de disparos/configuração) integradas; 281 testes. Ajustes de contrato na integração:
+`journey_enrollments.origem` (por onde o contato entrou; `motivo_saida` é só saída), `ProcessarImportacaoJob`
+aceita o registro ou o id, texto na régua só logo depois de "aguardar", `disparo:executar-campanhas` inclui a
+campanha pausada pelo disjuntor cujo remetente deve sonda (a sonda sai por ela e, se passa, a campanha volta),
+`disparo:sincronizar-remetentes {sender?}`, `Retencao` apaga exportações de campanha com mais de 7 dias
+(`retencao.exportacoes_dias`) e a anonimização tira o contato da amostra das prévias gravadas.
 
 ### 2026-10-28 - Réguas rodando, disjuntor compartilhado, suíte do núcleo
 `ProcessadorDeReguas` (4.9.1), `Disjuntor` extraído do executor (5), observers de base/tag, `passos_pulados`

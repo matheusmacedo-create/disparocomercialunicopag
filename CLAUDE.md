@@ -16,7 +16,10 @@ trilha de eventos, alertas no Discord, deploy no Forge. Aqui o "onboarding" é a
 - Setup: `composer setup`. Dev: `composer run dev`. Testes: `composer test` (PHPUnit, sem Pest). Estilo:
   `./vendor/bin/pint`.
 - Usuário do painel: `php artisan make:filament-user` (o primeiro vira Super Admin).
-- Rotinas (precisam do cron `schedule:run` e do worker `queue:work`): ver README e `routes/console.php`.
+- Rotinas (precisam do cron `schedule:run` e do worker `queue:work`): `executar-campanhas` (a cada minuto),
+  `processar-reguas` (10 min; `--segmentos` 09:30), `sincronizar-remetentes` (hora; `--rapido` 10 min),
+  `sincronizar-templates` (6 h), `importar-historico-kapso --todos` (03:00; `--incremental` 15 min com campanha
+  rodando), `podar` (04:00). Ver README e `routes/console.php`.
   `php artisan disparo:diagnostico` confere o ambiente de verdade (batimentos, interruptor, pepper,
   webhooks na Kapso).
 
