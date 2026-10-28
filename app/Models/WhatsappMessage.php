@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\Telefone;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Uma mensagem que saiu ou chegou por um remetente (KB 4.7).
@@ -87,9 +90,74 @@ class WhatsappMessage extends Model
         ];
     }
 
+    /** Classificação que o processador de eventos gravou no payload (`pedido_lgpd`, `parar`, `agora_nao`...). */
+    public const CLASSIFICACAO_PEDIDO_LGPD = 'pedido_lgpd';
+
     public function tratadaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'tratada_por');
+    }
+
+    /** Autor do texto livre mandado pelo painel. */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function scopeInbound(Builder $query): Builder
+    {
+        return $query->where('direcao', self::INBOUND);
+    }
+
+    /** Respostas que ninguém tratou ainda (tela Conversas). */
+    public function scopeNaoTratadas(Builder $query): Builder
+    {
+        return $query->whereNull('tratada_em');
+    }
+
+    public function classificacao(): ?string
+    {
+        $classe = data_get($this->payload, 'classificacao');
+
+        return is_string($classe) && $classe !== '' ? $classe : null;
+    }
+
+    public function pedidoLgpd(): bool
+    {
+        return $this->classificacao() === self::CLASSIFICACAO_PEDIDO_LGPD || filled(data_get($this->payload, 'lgpd'));
+    }
+
+    /** Prazo para atender o pedido do titular (Art. 18), quando o processador o gravou em `payload.lgpd.prazo`. */
+    public function prazoLgpd(): ?CarbonInterface
+    {
+        $prazo = data_get($this->payload, 'lgpd.prazo');
+
+        if (! is_string($prazo) || $prazo === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($prazo);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Alguém leu e tratou a resposta: fica quem e quando, e a leitura entra na trilha do contato
+     * (`conversa_lida`), como a LGPD pede. Idempotente.
+     */
+    public function marcarTratada(User $user): void
+    {
+        if ($this->tratada_em !== null) {
+            return;
+        }
+
+        $this->forceFill(['tratada_em' => now(), 'tratada_por' => $user->id])->save();
+
+        $hash = $this->contact?->telefone_hash ?? Telefone::hash(Telefone::canonico($this->telefone) ?? $this->telefone);
+
+        ContactEvent::registrar($hash, 'conversa_lida', ['mensagem_id' => $this->id, 'sender_id' => $this->sender_id], $user->id, $this->contact_id);
     }
 
     /** A Meta só aceita texto livre até 24 h depois da última mensagem do cliente. */

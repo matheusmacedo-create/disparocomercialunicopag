@@ -43,6 +43,12 @@ class ContactList extends Model
             if (blank($lista->slug)) {
                 $lista->slug = Str::limit(Str::slug((string) $lista->nome), 70, '').'-'.Str::lower(Str::random(4));
             }
+
+            // Base da UnicoDrop ou compartilhada: o lead consentiu com a outra marca, não com a ÚnicoPag.
+            // A trava mora aqui, não só no formulário, para valer também para importação e API (KB 2.13).
+            if ($lista->dono !== self::DONO_UNICOPAG) {
+                $lista->exige_consentimento = true;
+            }
         });
     }
 
