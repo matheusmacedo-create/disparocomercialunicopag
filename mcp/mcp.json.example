@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "unicopag-whatsapp": {
+      "command": "node",
+      "args": ["mcp/dist/mcp-server.js"]
+    }
+  }
+}

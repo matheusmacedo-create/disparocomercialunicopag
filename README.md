@@ -1,129 +1,70 @@
-# Disparo Comercial Unicopag — WhatsApp via MCP (Meta Cloud API)
+# ÚnicoPag Disparos
 
-Servidor **MCP** e **CLI** para disparos comerciais pelo número de WhatsApp Business da Unicopag,
-usando a **WhatsApp Business Cloud API** oficial da Meta (Graph API).
+Plataforma de disparos de WhatsApp da ÚnicoPag: **recuperação** de sellers inativos, **ativação** de
+sellers novos e **ofertas** a bases compartilhadas com a UnicoDrop, com bases de contatos, segmentos,
+campanhas aprovadas em quatro olhos, réguas de nutrição e as proteções que o incidente de 26/10/2026
+(número comercial em RED depois de 650 envios frios) exigiu: opt-out para sempre, teto diário com
+aquecimento, janela de horário, tranches com disjuntor de engajamento e trilha de tudo.
 
-Com o MCP conectado ao Claude (Claude Code, Claude Desktop, etc.) você pode pedir:
-> "Lista meus templates aprovados", "Manda o template X de teste pro meu número",
-> "Dispara o template prospeccao_maquininha para data/contatos.csv usando o first_name".
+Fala com a **Kapso** (WhatsApp oficial, histórico, webhook) e com a **Meta Cloud API** direta. Mesmo desenho
+do KYC (`unico-pag/unicopag-kyc`) e do MED (`autorespondermed2.0`): Laravel 12, Filament 4 em `/admin`,
+MySQL/MariaDB em produção, SQLite nos testes, fila em banco, Forge.
 
-## Conta configurada
+A memória do sistema (como ele se comporta e por quê) está em **`doc/DISPARO_KNOWLEDGE_BASE.md`**. Leia
+antes de mexer.
 
-| Item | Valor |
+## Rodar localmente
+
+```bash
+composer setup            # install, .env, key, migrate, npm install, build
+php artisan make:filament-user   # o primeiro usuário vira Super Admin
+composer run dev          # server + fila + logs + vite
+```
+
+No `.env`: `DISPARO_HASH_PEPPER` (gere com `openssl rand -hex 32`; sem ele nenhum hash sai) e, para
+falar com a Kapso, `KAPSO_API_KEY`. `DISPARO_ENVIO_HABILITADO=false` (padrão) mantém tudo em simulação:
+a campanha roda inteira sem mandar nada.
+
+Testes: `composer test` (PHPUnit; Kapso e Meta sempre por `Http::fake`). Estilo: `./vendor/bin/pint`.
+
+## Fluxo de uso
+
+1. **Configuração → Remetentes**: cadastre o número (provider, `phone_number_id`, categorias permitidas
+   MARKETING/UTILITY, teto, ritmo, janela), registre o webhook e sincronize número e templates.
+2. **Importações**: importe o **histórico da Kapso** do número (quem já recebeu o quê, quem respondeu,
+   quem pediu para parar) e as bases (CSV da UnicoDrop, sellers inativos do unico-api).
+3. **Contatos / Bases / Segmentos**: organize quem recebe o quê; bloqueios e pedidos para parar valem
+   para sempre.
+4. **Disparos → Campanhas**: template aprovado, variáveis mapeadas, público, prévia com motivos de
+   exclusão e custo, aprovação por outra pessoa (ou auto-aprovação com espera e teto), execução em
+   tranches dentro do teto e da janela.
+5. **Disparos → Réguas**: sequências de passos (template, aguardar, condição, texto na resposta),
+   aprovadas como as campanhas.
+6. **Conversas**: respostas dos clientes para tratar (janela de 24 h, pedidos LGPD com prazo).
+
+## Comandos
+
+| Comando | O que faz |
 |---|---|
-| Número | +55 21 92367-4860 — *Matheus Macedo -ÚnicoPag Checkout\|Gateway* |
-| Phone Number ID | `1161905150334981` |
-| WABA ID | `1278445183736183` |
-| Business ID | `1127366268551701` |
+| `disparo:executar-campanhas` | uma rodada das campanhas em andamento (agendado a cada minuto) |
+| `disparo:processar-reguas` | passos vencidos das réguas (a cada 10 min); `--segmentos` reavalia gatilhos |
+| `disparo:sincronizar-remetentes` | qualidade, tier e saúde dos números (de hora em hora; `--rapido` a cada 10 min com campanha rodando) |
+| `disparo:sincronizar-templates` | cache dos templates da Meta |
+| `disparo:importar-historico-kapso {sender?} [--todos] [--desde=] [--ate=] [--incremental] [--contatos] [--broadcasts]` | histórico de conversas, mensagens (só metadados) e broadcasts da Kapso (03:00 e, com campanha rodando, a cada 15 min) |
+| `disparo:importar-csv {arquivo}`, `disparo:importar-sellers-inativos [--arquivo=] [--dias=90]` | bases (CSV da UnicoDrop/planilhas; sellers inativos do unico-api, com base viva) |
+| `disparo:registrar-webhook {sender}` | gera o segredo e cadastra o webhook na Kapso |
+| `disparo:registrar-numero {sender} {etapa}` | registro do número na Cloud API direta (status, solicitar, verificar, registrar) |
+| `disparo:diagnostico` | cron, worker, interruptor, pepper, remetentes, webhooks |
+| `disparo:podar` | retenção (LGPD): conteúdo > 180 d, leads parados > 12 meses, exportações, webhook_calls |
 
-Esses IDs já são o padrão no código. **Falta apenas o `WHATSAPP_TOKEN`** (nunca faça commit dele).
+API `/api/v1` (header `X-API-Key`): `health`, `suppressions` (GET/POST, compartilhada com o KYC), `senders/{id}/templates`,
+`contacts/{telefone}` (mascarado), `campaigns` (só rascunho; aprovar e iniciar são do painel). Webhooks:
+`POST /api/webhooks/kapso/{webhook_key}` e `GET|POST /api/webhooks/meta`.
 
-## 1. Pré-requisitos na Meta
+Deploy: `doc/DEPLOY_FORGE.md` e `deploy/forge-deploy.sh`.
 
-1. **Business Manager** da Unicopag verificado.
-2. Em [developers.facebook.com](https://developers.facebook.com) → seu App → produto **WhatsApp**:
-   - Confirme que o App está vinculado à WABA `1278445183736183`.
-3. Crie um **token permanente**: Business Manager → Configurações → Usuários do sistema →
-   gere um token com `whatsapp_business_messaging` e `whatsapp_business_management`.
-4. Crie e aprove os **templates** (categoria *Marketing* para prospecção) no WhatsApp Manager.
-   Mensagem que *você* inicia só pode ser enviada como template aprovado.
+## `mcp/`
 
-### Registrar o número (status DISCONNECTED)
-
-Se `whatsapp_info_numero` mostrar `status: DISCONNECTED`, o número ainda não está ativo na Cloud API:
-
-```bash
-npm run registrar -- status
-npm run registrar -- solicitar SMS        # código chega por SMS no +55 21 92367-4860
-npm run registrar -- verificar 123456     # código recebido
-npm run registrar -- registrar 654321     # PIN de 6 dígitos (guarde: é a verificação em 2 etapas)
-```
-
-> Se o número estiver ativo no app WhatsApp/WhatsApp Business do celular, ele será desconectado do app
-> ao registrar na Cloud API. Apague a conta no app antes, ou use outro número.
-
-## 2. Instalação
-
-```bash
-npm install
-cp .env.example .env   # preencha token, phone number id e WABA id
-npm run build
-npm test
-```
-
-## 3. Conectar como MCP
-
-**Claude Code** — o `.mcp.json` na raiz já registra o servidor ao abrir o projeto
-(rode `npm run build` antes). Ou manualmente:
-
-```bash
-claude mcp add unicopag-whatsapp -- node /caminho/para/dist/mcp-server.js
-```
-
-**Claude Desktop** — em `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "unicopag-whatsapp": {
-      "command": "node",
-      "args": ["/caminho/absoluto/disparocomercialunicopag/dist/mcp-server.js"],
-      "env": {
-        "WHATSAPP_TOKEN": "EAAG..."
-      }
-    }
-  }
-}
-```
-
-### Ferramentas expostas
-
-| Ferramenta | O que faz |
-|---|---|
-| `whatsapp_info_numero` | Nome verificado, qualidade (GREEN/YELLOW/RED) e limite diário |
-| `whatsapp_registrar_numero` | Solicita código, verifica e registra o número na Cloud API |
-| `whatsapp_listar_templates` | Templates da WABA, com filtro por status |
-| `whatsapp_enviar_template` | Envia um template para 1 número (teste) |
-| `whatsapp_enviar_texto` | Texto livre (só entrega dentro da janela de 24h) |
-| `whatsapp_disparo_em_massa` | Disparo em massa a partir de CSV/lista (roda em 2º plano, **simulação por padrão**) |
-| `whatsapp_status_disparo` | Progresso do disparo |
-| `whatsapp_cancelar_disparo` | Interrompe um disparo em andamento |
-
-## 4. Disparo pela linha de comando
-
-O CSV é o mesmo formato do ManyChat (`phone,first_name`); aceita `,` ou `;` e detecta a
-coluna de telefone (`phone`, `telefone`, `whatsapp`, `celular`...).
-
-```bash
-# Simulação (não envia nada, gera relatório em data/)
-npm run disparo -- --csv data/contatos.csv --template prospeccao_maquininha --var "{{first_name|tudo bem}}"
-
-# Usando um arquivo de campanha
-npm run disparo -- --csv data/contatos.csv --config campanha.exemplo.json
-
-# Envio real
-npm run disparo -- --csv data/contatos.csv --config campanha.exemplo.json --enviar
-```
-
-### Variáveis do template
-
-- `{{coluna}}` → valor da coluna do CSV para aquele contato.
-- `{{coluna|padrão}}` → usa o padrão se a coluna estiver vazia (a Meta rejeita variável vazia).
-- Templates com variáveis nomeadas: use `variaveisNomeadas` (`{"nome": "{{first_name}}"}`).
-- Cabeçalho: `headerImagemUrl`, `headerDocumentoUrl`, `headerVideoUrl` ou `headerTexto`.
-- Botão de URL dinâmico: `botaoUrlSufixo`.
-
-## 5. Proteções embutidas
-
-- **Simulação por padrão** — envio real só com `--enviar` / `dry_run: false`.
-- Normalização de telefone brasileiro (DDI 55), remoção de **duplicados** e **inválidos**.
-- **Opt-out**: números em `data/optout.txt` (um por linha) nunca recebem mensagem.
-- Controle de velocidade (`DISPARO_MSG_POR_SEGUNDO`) e teto por execução (`DISPARO_LIMITE_POR_EXECUCAO`).
-- Nova tentativa com backoff em limites de taxa (429, 130429, 131056).
-- **Para tudo** em erros de conta/token ou de spam (190, 131031, 131048, 368) para não queimar o número.
-- CLI aborta o envio real se a qualidade do número estiver **RED**.
-- Relatório CSV por execução em `data/resultado-*.csv` (status, motivo, message_id).
-
-> Boas práticas: dispare só para quem deu consentimento (LGPD e política da Meta),
-> ofereça opção de sair na mensagem e comece com lotes pequenos — o limite diário
-> do número (tier) sobe conforme a qualidade se mantém boa.
+A CLI/MCP original em TypeScript (direto na Cloud API da Meta). Continua útil para listar templates,
+consultar o número e simular; o **envio real fica desligado** (`MCP_ENVIO_REAL=true` só para emergência),
+porque ela não vê supressões, teto, janela nem aprovação. Caminho natural: cliente da `/api/v1`.
