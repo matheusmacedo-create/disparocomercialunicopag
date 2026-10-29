@@ -83,6 +83,7 @@ final class ImportadorKapso
     {
         $cliente = $this->clientes->kapso($sender);
         [$desde, $ate, $incremental] = $this->janela($sender, $opcoes);
+        $this->gravarConteudo = (bool) ($opcoes['conteudo'] ?? config('disparo.historico.gravar_conteudo', false));
 
         $importacao = ContactImport::query()->create([
             'tipo' => ContactImport::TIPO_KAPSO,
@@ -95,6 +96,7 @@ final class ImportadorKapso
                 'incremental' => $incremental,
                 'contatos' => (bool) ($opcoes['contatos'] ?? false),
                 'broadcasts' => (bool) ($opcoes['broadcasts'] ?? false),
+                'conteudo' => $this->gravarConteudo,
             ],
             'user_id' => $opcoes['user_id'] ?? null,
             'iniciado_em' => now(),
@@ -311,8 +313,8 @@ final class ImportadorKapso
             'direcao' => $direcao,
             'tipo' => $tipo,
             'template_nome' => $templateNome !== null ? mb_substr($templateNome, 0, 512) : null,
-            // Texto nunca é gravado no histórico importado (LGPD): só passa pelo classificador em memória.
-            'conteudo' => null,
+            // Texto só com a opção `conteudo` (padrão desligado, LGPD): sem ela passa só pelo classificador em memória.
+            'conteudo' => $this->conteudoDe($item),
             'status' => $status,
             'codigo_erro' => $codigoErro !== null ? mb_substr($codigoErro, 0, 40) : null,
             'origem' => WhatsappMessage::ORIGEM_HISTORICO_KAPSO,
@@ -327,6 +329,12 @@ final class ImportadorKapso
         if (! $mensagem->wasRecentlyCreated) {
             $c['mensagens']['ja_existiam']++;
             $this->reconciliar($mensagem, $status, $quando, $contato, $c);
+
+            // Importação anterior sem texto: com a opção ligada, completa o que faltava.
+            if ($this->gravarConteudo && $mensagem->conteudo === null && ($conteudo = $this->conteudoDe($item)) !== null) {
+                $mensagem->forceFill(['conteudo' => $conteudo])->saveQuietly();
+                $c['mensagens']['texto_completado'] = ($c['mensagens']['texto_completado'] ?? 0) + 1;
+            }
 
             return;
         }
@@ -826,6 +834,20 @@ final class ImportadorKapso
      * @param  array<string, mixed>  $item
      * @return list<string>
      */
+    private bool $gravarConteudo = false;
+
+    /** Texto da mensagem para o banco, só com a opção ligada; template sem texto no item fica nulo. */
+    private function conteudoDe(array $item): ?string
+    {
+        if (! $this->gravarConteudo) {
+            return null;
+        }
+
+        $textos = $this->textosDe($item);
+
+        return $textos === [] ? null : mb_substr(implode("\n", $textos), 0, 4000);
+    }
+
     private function textosDe(array $item): array
     {
         $textos = [];

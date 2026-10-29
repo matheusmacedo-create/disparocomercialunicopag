@@ -138,6 +138,10 @@ return [
 
     'historico' => [
         // Janela da importação incremental da Kapso quando o remetente nunca importou (dias).
+        // Gravar o texto das mensagens importadas (inbound e outbound). Desligado por padrão (LGPD): a
+        // operação liga quando quer a linha de conversa com o cliente no painel (decisão de 29/10/2026).
+        // O texto segue sujeito à retenção (retencao.conteudo_dias) e só aparece com `view conversations`.
+        'gravar_conteudo' => (bool) env('DISPARO_HISTORICO_GRAVAR_CONTEUDO', false),
         // Teto de páginas por consulta (proteção contra cursor que não anda).
         'max_paginas' => 5000,
         'janela_inicial_dias' => (int) env('DISPARO_HISTORICO_JANELA_INICIAL_DIAS', 180),
@@ -221,6 +225,9 @@ return [
         // Lista de sellers inativos (contrato JSON: account_id, telefone?, nome?, email?, ultima_venda_em?,
         // dias_sem_venda?, etapa?, aprovado_em?). Caminho relativo à base ou URL absoluta; `{dias}` é substituído.
         'sellers_endpoint' => env('UNICOPAG_SELLERS_ENDPOINT'),
+        // A lista vive no KYC (`GET /api/disparo/sellers-inativos`, chave DISPARO_API_KEY de lá); sem esta,
+        // usa a mesma chave do cadastro.
+        'sellers_key' => env('UNICOPAG_SELLERS_KEY'),
         // Cache do cadastro já normalizado (telefone E.164 e nome), por conta.
         'cache_cadastro_horas' => 24,
         'timeout' => 8,

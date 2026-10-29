@@ -27,6 +27,8 @@ class DashboardTest extends TestCase
             ->assertSee('Ambiente em SIMULAÇÃO')
             ->assertSee('Histórico da Kapso desatualizado')
             ->assertSee('Enviados hoje')
+            ->assertSee('Envios por dia')
+            ->assertSee('Templates com mais aderência')
             ->assertSee('Campanha rodando')
             ->assertSee($sender->nome);
     }
