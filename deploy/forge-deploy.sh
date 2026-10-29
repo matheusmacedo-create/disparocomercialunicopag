@@ -9,6 +9,10 @@ cd $FORGE_RELEASE_DIRECTORY
 
 $FORGE_COMPOSER install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
+# CSS/JS/fontes do Filament ficam fora do git (public/css|js|fonts/filament): publica a cada release.
+# O composer já faz isso no post-autoload-dump (filament:upgrade); a linha abaixo é a rede de segurança.
+$FORGE_PHP artisan filament:assets
+
 npm ci
 npm run build
 

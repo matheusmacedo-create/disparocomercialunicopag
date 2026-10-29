@@ -385,7 +385,19 @@ outbound do remetente, de qualquer data, ou há template ao telefone nos último
 - No histórico importado a mesma classificação vale, com o contexto (mensagem citada ou template nos 7
   dias anteriores); sem contexto só o inequívoco bloqueia.
 
-## 7. Importação do histórico da Kapso `[código]` `[inferido]`
+## 7. Importação do histórico da Kapso `[código]` `[prod 29/10/2026]`
+
+**Primeira importação real (prévia `disparo.on-forge.com`, 29/10/2026, 21 s):** janela de 180 dias do número
+comercial (`+55 21 92367-1234`, qualidade YELLOW, `messaging_limit_tier` vem **nulo** da Kapso → teto efetivo
+100/dia pelo fator YELLOW): 29 páginas, 711 conversas, 690 contatos, 1.029 mensagens (159 inbound, 870
+outbound, 705 templates), 154 respostas a template nosso, 12 "pare" → 11 supressões `historico`, 0 pedidos
+LGPD, 0 recusas, nenhuma espera de rate limit. Os campos inferidos de `conversations` e `messages` (direção,
+timestamp, `template.name`, `context.id`, status) vieram como previsto. **Broadcasts**: `GET
+/platform/v1/whatsapp/broadcasts` é da conta inteira, não do número: cada item traz `phone_number_id`,
+`status` (`draft`, ...), contadores (`sent_count`, `suppressed_count`...), `whatsapp_template` embutido e
+`total_recipients`; `/{id}/recipients` responde `{data: [], after}`. O único broadcast da conta era um
+rascunho de outro número (avisos do KYC) - a importação filtra por `phone_number_id` do remetente e ignora
+rascunhos. Webhook da prévia ainda não registrado (comando bloqueado para o agente nesta sessão).
 
 Endpoints lidos na documentação pública em 28/10/2026 (não rodados contra a conta ainda):
 `GET /meta/whatsapp/v24.0/{phone_number_id}/conversations?fields=kapso(default)&last_active_since=`,
@@ -528,6 +540,19 @@ Usuário nunca é apagado: é desativado (`users.ativo`, `canAccessPanel` exige 
 próprio papel nem se desativa. Conversas fica no grupo Contatos (balcão de respostas: sem tratamento,
 pedidos LGPD com prazo, tratadas), não em Disparos.
 
+## 12.1 Prévia no Forge `[prod 29/10/2026]`
+
+Site **`https://disparo.on-forge.com`** (Forge, org `unicopag`, servidor `ms-subscription` 1158404, site
+**3471750**), no mesmo desenho da prévia do MED (`ms-subscription-ovgdz3od.on-forge.com`): PHP 8.4, zero
+downtime, `storage/` compartilhado entre releases, **SQLite** em `/home/forge/disparo.on-forge.com/storage/disparo.sqlite`,
+fila `database`, cache e sessão em arquivo, `DISPARO_ENVIO_HABILITADO=false` (simulação: nada sai), sem chave
+da Kapso/Meta/unico-api/Discord. Push na branch `claude/lucid-gauss-wyiq4v` (a padrão do repositório) faz
+deploy sozinho (push-to-deploy). Script de deploy = `deploy/forge-deploy.sh` mais o `touch` do SQLite. Cron
+`schedule:run` (job 2197534, todo minuto) e worker `queue:work database` (processo 1190297) criados pela API.
+HTTPS automático do `on-forge.com`. Primeiro usuário (Super Admin) criado por `make:filament-user`.
+Para virar produção: domínio próprio (alias + Let's Encrypt), schema no RDS no lugar do SQLite e os segredos
+no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
+
 ## 13. Em aberto
 
 - **Dono do número comercial**: decidir entre (A) o KYC mandar os avisos pela `/api/v1` desta plataforma e
@@ -601,6 +626,10 @@ pedidos LGPD com prazo, tratadas), não em Disparos.
   nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
 
 ## Histórico de atualizações
+
+### 2026-10-29 - Prévia no Forge
+Site `disparo.on-forge.com` (12.1) criado pela API do Forge: SQLite, simulação, cron, worker, HTTPS automático,
+push-to-deploy. `composer.json` passou a exigir PHP ^8.3 (o lock já exigia) e a CI roda em 8.3/8.4.
 
 ### 2026-10-28 - Revisão adversarial do código integrado (3 lentes, 27 achados, 24 corrigidos)
 Decisões e comportamento que mudaram `[decisão]` `[código]`:

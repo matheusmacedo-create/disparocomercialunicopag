@@ -536,7 +536,16 @@ final class ImportadorKapso
 
             $numero = $this->texto($broadcast, ['phone_number_id', 'whatsapp_phone_number_id', 'phone_number.id']);
 
+            // A lista de broadcasts é da conta inteira: só os deste número, e rascunho nunca mandou nada.
             if ($numero !== null && $numero !== (string) $sender->phone_number_id) {
+                $c['broadcasts']['de_outro_numero'] = ($c['broadcasts']['de_outro_numero'] ?? 0) + 1;
+
+                continue;
+            }
+
+            if (strtolower((string) $this->texto($broadcast, ['status'])) === 'draft') {
+                $c['broadcasts']['rascunhos'] = ($c['broadcasts']['rascunhos'] ?? 0) + 1;
+
                 continue;
             }
 
