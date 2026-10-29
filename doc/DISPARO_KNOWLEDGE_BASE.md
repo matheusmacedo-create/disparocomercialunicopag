@@ -385,7 +385,19 @@ outbound do remetente, de qualquer data, ou há template ao telefone nos último
 - No histórico importado a mesma classificação vale, com o contexto (mensagem citada ou template nos 7
   dias anteriores); sem contexto só o inequívoco bloqueia.
 
-## 7. Importação do histórico da Kapso `[código]` `[inferido]`
+## 7. Importação do histórico da Kapso `[código]` `[prod 29/10/2026]`
+
+**Primeira importação real (prévia `disparo.on-forge.com`, 29/10/2026, 21 s):** janela de 180 dias do número
+comercial (`+55 21 92367-1234`, qualidade YELLOW, `messaging_limit_tier` vem **nulo** da Kapso → teto efetivo
+100/dia pelo fator YELLOW): 29 páginas, 711 conversas, 690 contatos, 1.029 mensagens (159 inbound, 870
+outbound, 705 templates), 154 respostas a template nosso, 12 "pare" → 11 supressões `historico`, 0 pedidos
+LGPD, 0 recusas, nenhuma espera de rate limit. Os campos inferidos de `conversations` e `messages` (direção,
+timestamp, `template.name`, `context.id`, status) vieram como previsto. **Broadcasts**: `GET
+/platform/v1/whatsapp/broadcasts` é da conta inteira, não do número: cada item traz `phone_number_id`,
+`status` (`draft`, ...), contadores (`sent_count`, `suppressed_count`...), `whatsapp_template` embutido e
+`total_recipients`; `/{id}/recipients` responde `{data: [], after}`. O único broadcast da conta era um
+rascunho de outro número (avisos do KYC) - a importação filtra por `phone_number_id` do remetente e ignora
+rascunhos. Webhook da prévia ainda não registrado (comando bloqueado para o agente nesta sessão).
 
 Endpoints lidos na documentação pública em 28/10/2026 (não rodados contra a conta ainda):
 `GET /meta/whatsapp/v24.0/{phone_number_id}/conversations?fields=kapso(default)&last_active_since=`,

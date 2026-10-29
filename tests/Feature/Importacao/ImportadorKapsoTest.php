@@ -120,6 +120,9 @@ class ImportadorKapsoTest extends TestCase
                 return Http::response(['data' => [
                     ['id' => 'b1', 'template_name' => 'oferta_maquininha_v1', 'created_at' => $this->agora->subHours(2)->toIso8601String()],
                     ['id' => 'b-velho', 'template_name' => 'oferta_maquininha_v1', 'created_at' => $this->agora->subDays(400)->toIso8601String()],
+                    // A lista é da conta inteira: rascunho e broadcast de outro número não entram (conferido em produção, KB 7).
+                    ['id' => 'b-rascunho', 'status' => 'draft', 'template_name' => 'oferta_maquininha_v1', 'created_at' => $this->agora->subHours(1)->toIso8601String()],
+                    ['id' => 'b-outro', 'phone_number_id' => '999', 'template_name' => 'oferta_maquininha_v1', 'created_at' => $this->agora->subHours(1)->toIso8601String()],
                 ]]);
             }
 
@@ -201,6 +204,7 @@ class ImportadorKapsoTest extends TestCase
 
         // Broadcasts: r1 casou com a mensagem local (nada duplicado), o velho ficou fora da janela.
         $this->assertSame(1, $r['broadcasts']['fora_da_janela']);
+        $this->assertSame([1, 1], [$r['broadcasts']['rascunhos'], $r['broadcasts']['de_outro_numero']]);
         $this->assertSame([1, 3], [$r['broadcasts']['casados'], $r['broadcasts']['criados']]);
         $this->assertSame(1, WhatsappMessage::query()->where('telefone', '+5521977776666')->where('template_nome', 'oferta_maquininha_v1')->count());
         $this->assertSame('broadcast:b1:r1', $existente->refresh()->external_key);
