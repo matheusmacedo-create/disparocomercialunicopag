@@ -38,7 +38,7 @@ class UnicopagClient
 
     public function sellersConfigurado(): bool
     {
-        return filled(config('disparo.unicoapi.key')) && filled(config('disparo.unicoapi.sellers_endpoint'))
+        return filled($this->chaveDosSellers()) && filled(config('disparo.unicoapi.sellers_endpoint'))
             && (filled(config('disparo.unicoapi.base_url')) || preg_match('#^https?://#i', (string) config('disparo.unicoapi.sellers_endpoint')) === 1);
     }
 
@@ -95,7 +95,7 @@ class UnicopagClient
         $sellers = [];
 
         for ($pagina = 0; $pagina < 200 && $url !== null; $pagina++) {
-            $json = $this->get($url, []);
+            $json = $this->get($url, [], $this->chaveDosSellers());
 
             if ($json === null) {
                 break;
@@ -135,9 +135,9 @@ class UnicopagClient
      * @param  array<string, string>  $placeholders
      * @return array<string, mixed>|null null = 404
      */
-    private function get(string $endpoint, array $placeholders): ?array
+    private function get(string $endpoint, array $placeholders, ?string $key = null): ?array
     {
-        $key = (string) config('disparo.unicoapi.key');
+        $key = (string) ($key ?? config('disparo.unicoapi.key'));
         $url = $this->url($endpoint, $placeholders);
 
         try {
@@ -165,6 +165,12 @@ class UnicopagClient
         }
 
         return $json;
+    }
+
+    /** Chave da rota de sellers inativos (no KYC) ou, sem ela, a do cadastro. */
+    private function chaveDosSellers(): string
+    {
+        return trim((string) (config('disparo.unicoapi.sellers_key') ?: config('disparo.unicoapi.key')));
     }
 
     /** @param  array<string, string>  $placeholders */

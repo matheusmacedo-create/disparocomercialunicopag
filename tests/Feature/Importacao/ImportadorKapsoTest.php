@@ -248,4 +248,18 @@ class ImportadorKapsoTest extends TestCase
 
         $this->assertSame(1, ContactImport::query()->where('tipo', 'kapso')->count());
     }
+
+    public function test_com_a_opcao_conteudo_grava_o_texto_e_completa_o_que_foi_importado_sem_ele(): void
+    {
+        $this->fakeKapso();
+        $primeira = $this->importador()->importar($this->sender, []);
+        $this->assertSame(0, WhatsappMessage::query()->where('origem', 'historico_kapso')->whereNotNull('conteudo')->count(), 'padrão: só metadados');
+        $this->assertFalse($primeira->parametros['conteudo']);
+
+        $segunda = $this->importador()->importar($this->sender, ['conteudo' => true, 'desde' => $this->agora->subDays(30)]);
+
+        $this->assertTrue($segunda->parametros['conteudo']);
+        $this->assertSame('não quero', WhatsappMessage::query()->where('wamid', 'wamid.in1')->value('conteudo'), 'texto como veio, sem normalizar');
+        $this->assertGreaterThan(0, $segunda->resultado['mensagens']['texto_completado'] ?? 0, 'mensagens da primeira importação ganharam o texto');
+    }
 }

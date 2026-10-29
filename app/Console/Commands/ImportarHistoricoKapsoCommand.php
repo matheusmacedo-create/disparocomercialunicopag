@@ -25,7 +25,8 @@ class ImportarHistoricoKapsoCommand extends Command
         {--ate= : Fim da janela (padrão: agora)}
         {--incremental : Continua de historico_importado_ate (menos a folga)}
         {--contatos : Também completa nomes pela lista de contatos do número}
-        {--broadcasts : Também importa os broadcasts do painel da Kapso}';
+        {--broadcasts : Também importa os broadcasts do painel da Kapso}
+        {--conteudo : Grava o texto das mensagens (padrão: só metadados; ver DISPARO_HISTORICO_GRAVAR_CONTEUDO)}';
 
     protected $description = 'Importa o histórico (conversas, mensagens, contatos, broadcasts) de um número da Kapso.';
 
@@ -55,6 +56,7 @@ class ImportarHistoricoKapsoCommand extends Command
                     'incremental' => (bool) $this->option('incremental'),
                     'contatos' => (bool) $this->option('contatos'),
                     'broadcasts' => (bool) $this->option('broadcasts'),
+                    'conteudo' => $this->option('conteudo') ? true : null,
                 ]);
             } catch (Throwable $e) {
                 $falhas++;
