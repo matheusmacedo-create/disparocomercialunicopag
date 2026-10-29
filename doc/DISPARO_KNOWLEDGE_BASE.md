@@ -528,6 +528,19 @@ Usuário nunca é apagado: é desativado (`users.ativo`, `canAccessPanel` exige 
 próprio papel nem se desativa. Conversas fica no grupo Contatos (balcão de respostas: sem tratamento,
 pedidos LGPD com prazo, tratadas), não em Disparos.
 
+## 12.1 Prévia no Forge `[prod 29/10/2026]`
+
+Site **`https://disparo.on-forge.com`** (Forge, org `unicopag`, servidor `ms-subscription` 1158404, site
+**3471750**), no mesmo desenho da prévia do MED (`ms-subscription-ovgdz3od.on-forge.com`): PHP 8.4, zero
+downtime, `storage/` compartilhado entre releases, **SQLite** em `/home/forge/disparo.on-forge.com/storage/disparo.sqlite`,
+fila `database`, cache e sessão em arquivo, `DISPARO_ENVIO_HABILITADO=false` (simulação: nada sai), sem chave
+da Kapso/Meta/unico-api/Discord. Push na branch `claude/lucid-gauss-wyiq4v` (a padrão do repositório) faz
+deploy sozinho (push-to-deploy). Script de deploy = `deploy/forge-deploy.sh` mais o `touch` do SQLite. Cron
+`schedule:run` (job 2197534, todo minuto) e worker `queue:work database` (processo 1190297) criados pela API.
+HTTPS automático do `on-forge.com`. Primeiro usuário (Super Admin) criado por `make:filament-user`.
+Para virar produção: domínio próprio (alias + Let's Encrypt), schema no RDS no lugar do SQLite e os segredos
+no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
+
 ## 13. Em aberto
 
 - **Dono do número comercial**: decidir entre (A) o KYC mandar os avisos pela `/api/v1` desta plataforma e
@@ -601,6 +614,10 @@ pedidos LGPD com prazo, tratadas), não em Disparos.
   nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
 
 ## Histórico de atualizações
+
+### 2026-10-29 - Prévia no Forge
+Site `disparo.on-forge.com` (12.1) criado pela API do Forge: SQLite, simulação, cron, worker, HTTPS automático,
+push-to-deploy. `composer.json` passou a exigir PHP ^8.3 (o lock já exigia) e a CI roda em 8.3/8.4.
 
 ### 2026-10-28 - Revisão adversarial do código integrado (3 lentes, 27 achados, 24 corrigidos)
 Decisões e comportamento que mudaram `[decisão]` `[código]`:
