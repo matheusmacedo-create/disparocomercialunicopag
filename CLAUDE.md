@@ -7,7 +7,7 @@ trilha de eventos, alertas no Discord, deploy no Forge. Aqui o "onboarding" é a
 "documento" é o template.
 
 ## Stack
-- Laravel 12, PHP ^8.2, Filament 4 (painel em `/admin`), spatie/laravel-permission.
+- Laravel 12, PHP ^8.3, Filament 4 (painel em `/admin`), spatie/laravel-permission.
 - Produção: MySQL/MariaDB + fila em banco. Testes: SQLite isolado por processo (`tests/bootstrap.php`).
 - `mcp/`: a CLI/MCP original em TypeScript (direto na Meta). Envio real desligado por padrão
   (`MCP_ENVIO_REAL=true` só para emergência). Não é canal de envio.
