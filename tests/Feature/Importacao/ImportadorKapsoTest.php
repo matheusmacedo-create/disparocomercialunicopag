@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Importacao;
 
+use App\Models\Campaign;
+use App\Models\CampaignRecipient;
 use App\Models\Contact;
 use App\Models\ContactEvent;
 use App\Models\ContactImport;
@@ -143,9 +145,12 @@ class ImportadorKapsoTest extends TestCase
     {
         $this->fakeKapso();
         $local = Contact::factory()->create(['telefone' => '+5521977776666']);
+        $campanha = Campaign::factory()->for($this->sender)->emAndamento()->create(['template_nome' => 'oferta_maquininha_v1']);
+        $destinatario = CampaignRecipient::query()->create(['campaign_id' => $campanha->id, 'contact_id' => $local->id, 'telefone' => $local->telefone, 'status' => 'enviado', 'enviado_em' => $this->agora->subHours(2)]);
         $existente = WhatsappMessage::query()->create([
             'sender_id' => $this->sender->id, 'contact_id' => $local->id, 'telefone' => $local->telefone, 'direcao' => 'outbound', 'wamid' => 'wamid.local1',
             'tipo' => 'template', 'template_nome' => 'oferta_maquininha_v1', 'status' => 'sent', 'origem' => 'campanha', 'enviado_em' => $this->agora->subHours(2), 'payload' => ['categoria' => 'MARKETING'],
+            'campaign_recipient_id' => $destinatario->id,
         ]);
 
         $importacao = $this->importador()->importar($this->sender, ['contatos' => true, 'broadcasts' => true]);
@@ -167,6 +172,8 @@ class ImportadorKapsoTest extends TestCase
         $this->assertSame(1, $r['mensagens']['ja_existiam']);
         $this->assertSame(0, WhatsappMessage::query()->where('origem', 'historico_kapso')->whereNotNull('conteudo')->count());
         $this->assertSame('read', $existente->refresh()->status, 'a entrega da mensagem local avançou com o que a Kapso disse');
+        $this->assertSame('lido', $destinatario->refresh()->status, 'o destinatário da campanha também avança (disjuntor enxerga sem webhook)');
+        $this->assertSame(1, $local->refresh()->lidos_total);
         $this->assertSame('conv-5521998765432', WhatsappMessage::query()->where('wamid', 'wamid.out1')->value('kapso_conversation_id'));
         $this->assertSame('MARKETING', WhatsappMessage::query()->where('wamid', 'wamid.out1')->first()->payload['categoria'], 'categoria vem do cache de templates');
 

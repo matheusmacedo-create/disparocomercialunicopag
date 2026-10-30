@@ -420,7 +420,11 @@ Como o `ImportadorKapso` faz de fato `[código]` (o formato das respostas da Kap
 leitura dos campos é tolerante e a primeira importação real deve anotar aqui o que veio):
 - Janela: `--desde/--ate` explícitos; `--incremental` parte de `historico_importado_ate` menos 60 min
   (`historico.folga_incremental_minutos`); sem nada, `historico.janela_inicial_dias` (180). O cursor nunca volta.
-- **Texto nunca é gravado** (`conteudo` nulo em `historico_kapso`): a inbound passa em memória pelo
+- **Texto só com a opção `--conteudo`** (ou `DISPARO_HISTORICO_GRAVAR_CONTEUDO=true`) `[decisão 29/10/2026]`: o Matheus pediu
+  a linha de conversa completa com o cliente no painel; com a opção, inbound e outbound de texto ganham `conteudo`
+  (template não traz corpo no item da Kapso; o painel mostra o corpo pelo cache de templates), importação repetida
+  completa o que ficou sem texto, e o texto segue a retenção (`retencao.conteudo_dias`) e o gate `view
+  conversations`. Sem a opção (padrão), vale o desenho original: a inbound passa em memória pelo
   `ClassificadorDeResposta::classificar` COMPLETO, com contexto - `respondeATemplate` = o `context.id` aponta
   para template outbound do mesmo remetente OU houve template outbound ao telefone nos 7 dias ANTERIORES à
   inbound (`historico.resposta_janela_dias`). Outbound é importado antes de inbound por isso.
@@ -531,6 +535,12 @@ campanhas e réguas sem aprovar, conversas; sem PII, sem remetentes), Visualizad
 aparece com `Permissions::allows(...)` e é checada de novo no servidor; o Filament recusa chamar ação
 escondida; `status` das campanhas e réguas não é campo de formulário.
 
+Dashboard `[código 29/10/2026]`: **Envios por dia (30 dias)** (gráfico de linha: templates enviados, entregues e lidos
+por dia de `enviado_em`, qualquer origem, e respostas recebidas no dia; cache 5 min) e **Templates com mais
+aderência (90 dias)** (`AderenciaDeTemplates`: por template, enviados, entregues, lidos, respostas e taxa; resposta
+= inbound do mesmo telefone citando o template ou até 72 h depois; mínimo 5 envios; cache 10 min). Na prévia, com o
+histórico real: `recurso_liberado_{s,y,t}_v1`, ~215 envios cada, 95% entregues, 30% lidos, 12-17% de resposta.
+
 Matriz de PII do painel (`App\Filament\Support\Pii`): telefone mascarado em toda lista e ficha sem `view
 pii` (busca por telefone funciona mesmo assim, por hash e pela forma sem nono dígito); CPF/CNPJ sempre
 pelo `Mask::documento`; e-mail, atributos, variáveis renderizadas e amostra da prévia só com `view pii`;
@@ -626,6 +636,12 @@ no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
   nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
 
 ## Histórico de atualizações
+
+### 2026-10-29 - Painel com gráfico e aderência; histórico com texto; sellers inativos pelo KYC
+Widgets de envios por dia e aderência por template (12); `--conteudo` no histórico da Kapso (7, decisão do Matheus);
+rota `GET /api/disparo/sellers-inativos` no KYC (PR unico-pag/unicopag-kyc#149) e `UNICOPAG_SELLERS_KEY` (9).
+Prévia: Kapso conectada (número YELLOW, 37 templates), histórico de 711 conversas/1.029 mensagens com texto;
+webhook ainda não registrado (comando bloqueado para o agente).
 
 ### 2026-10-29 - Prévia no Forge
 Site `disparo.on-forge.com` (12.1) criado pela API do Forge: SQLite, simulação, cron, worker, HTTPS automático,

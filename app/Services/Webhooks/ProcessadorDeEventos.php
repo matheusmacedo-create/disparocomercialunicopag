@@ -130,7 +130,8 @@ final class ProcessadorDeEventos
     }
 
     /** O destinatário da campanha, a inscrição na régua e os contadores do contato seguem a mensagem. */
-    private function refletir(WhatsappMessage $mensagem, ?string $antes): void
+    /** Reflete a mudança de status da mensagem no contato e no destinatário/inscrição ligados (webhook e importação). */
+    public function refletir(WhatsappMessage $mensagem, ?string $antes): void
     {
         $contato = $mensagem->contact;
 
@@ -362,7 +363,8 @@ final class ProcessadorDeEventos
     }
 
     /** Destinatário da campanha vira `respondido`; inscrição na régua sai (ou segue ao passo de texto). */
-    private function refletirResposta(WhatsappMessage $template, Contact $contato, ?string $classificacao, CarbonImmutable $quando): void
+    /** Resposta do contato a um template nosso: destinatário `respondido`, contadores da campanha, saída/avanço da régua. */
+    public function refletirResposta(WhatsappMessage $template, Contact $contato, ?string $classificacao, CarbonImmutable $quando): void
     {
         if ($template->campaign_recipient_id !== null && ($destinatario = CampaignRecipient::query()->find($template->campaign_recipient_id)) !== null) {
             $anterior = $destinatario->status;
