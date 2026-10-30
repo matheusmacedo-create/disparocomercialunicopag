@@ -12,6 +12,7 @@ use App\Models\Sender;
 use App\Models\Suppression;
 use App\Models\WhatsappMessage;
 use App\Services\Webhooks\ClassificadorDeResposta;
+use App\Services\Webhooks\ProcessadorDeEventos;
 use App\Services\WhatsApp\KapsoClient;
 use App\Services\WhatsApp\WhatsAppClientFactory;
 use App\Services\WhatsApp\WhatsAppException;
@@ -43,7 +44,7 @@ final class ImportadorKapso
 {
     private Closure $dormir;
 
-    public function __construct(private readonly WhatsAppClientFactory $clientes)
+    public function __construct(private readonly WhatsAppClientFactory $clientes, private readonly ProcessadorDeEventos $eventos)
     {
         $this->dormir = static function (int $segundos): void {
             sleep($segundos);
@@ -381,6 +382,7 @@ final class ImportadorKapso
         }
 
         if (WhatsappMessage::rank($status) > WhatsappMessage::rank($mensagem->status) || ($mensagem->status === WhatsappMessage::STATUS_PENDING && $status !== WhatsappMessage::STATUS_PENDING)) {
+            $antes = $mensagem->status;
             $mensagem->forceFill(array_filter([
                 'status' => $status,
                 'codigo_erro' => null,
@@ -390,6 +392,10 @@ final class ImportadorKapso
                 'contact_id' => $mensagem->contact_id ?? $contato->id,
             ], fn ($v, $k): bool => $v !== null || in_array($k, ['codigo_erro', 'erro'], true), ARRAY_FILTER_USE_BOTH))->save();
             $c['mensagens']['status_avancado']++;
+
+            // Mesmo reflexo do webhook: contadores do contato e destinatário da campanha (entregue/lido). É o que
+            // mantém o disjuntor de engajamento enxergando quando o webhook atrasa ou não está registrado.
+            $this->eventos->refletir($mensagem->fresh(['contact']), $antes);
         }
     }
 
@@ -417,6 +423,11 @@ final class ImportadorKapso
         }
 
         $classificacao = ClassificadorDeResposta::classificar($textos, $template !== null || $foiBotao);
+
+        // Resposta a um template de campanha/régua nosso: destinatário `respondido`, contadores e régua, como no webhook.
+        if ($template !== null && ($template->campaign_recipient_id !== null || $template->journey_enrollment_id !== null)) {
+            $this->eventos->refletirResposta($template, $contato, $classificacao, $quando);
+        }
 
         if ($classificacao === null) {
             return;
