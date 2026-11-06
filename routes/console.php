@@ -83,6 +83,13 @@ Schedule::command('disparo:importar-historico-kapso --todos --incremental')
     ->withoutOverlapping(14)
     ->appendOutputTo($log);
 
+// Provável bloqueio (KB 2.9): template `sent` sem `delivered` por 48 h tira o contato do MARKETING.
+Schedule::command('disparo:marcar-provavel-bloqueio --send')
+    ->timezone($fuso)
+    ->hourlyAt(25)
+    ->withoutOverlapping(30)
+    ->appendOutputTo($log);
+
 // Retenção (LGPD): webhook_calls e, quando a frente de importação entrar, contatos e mensagens.
 Schedule::command('disparo:podar')
     ->timezone($fuso)

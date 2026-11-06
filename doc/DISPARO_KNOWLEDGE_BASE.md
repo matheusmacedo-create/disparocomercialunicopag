@@ -462,6 +462,8 @@ campanha MARKETING e no detalhe do contato; `stopped` vira supressão `meta_mark
 | `disparo:registrar-webhook {sender}` | manual | gera o segredo (mostra uma vez), cadastra na Kapso |
 | `disparo:registrar-numero {sender}` | manual | provider Meta: request_code / verify_code / register |
 | `disparo:diagnostico` | manual | batimentos (agendador por minuto, worker a cada 5 min), interruptor, pepper, remetentes e webhooks na Kapso, webhooks sem processar |
+| `disparo:marcar-provavel-bloqueio --send` | de hora em hora (:25) | template `sent` sem entrega há 48 h (últimos 30 dias) e nada do contato entregue ou respondido depois = `provavel_bloqueio_em` (KB 2.9); até 06/11/2026 a guarda existia e nada gravava |
+| `disparo:corrigir-horarios-webhook [--aplicar] [--desde=]` | manual, uma vez | reparo dos horários do webhook gravados em UTC até 06/11/2026 (seção 10.1) |
 | `disparo:podar` | 04:00 | retenção (seção 2.13) |
 
 ## 9. Sellers inativos (unico-api) `[código]` `[decisão]` `[inferido]`
@@ -621,6 +623,13 @@ no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
   `insertOrIgnore` antes do processamento e `processado_em` no fim: entrega repetida já processada = 200 sem
   repetir; lote que ficou pela metade (500) roda de novo na reentrega. `webhook_calls.payload` guarda só
   contagens e os resumos do processador (ids, classificação) - nunca o corpo.
+- **Hora dos eventos no fuso da app** (06/11/2026): `ProcessadorDeEventos::momento()` usava
+  `CarbonImmutable::createFromTimestamp()` sem `setTimezone`. O Carbon 3 devolve UTC e o Eloquent grava a hora como
+  está, então tudo que vinha do webhook (envio de mensagem de fora, entrega, leitura, resposta, supressão,
+  `ultima_resposta_em`) ficava **3 h adiantado**: 95 de 95 linhas `origem=webhook` em 05/11. Isso deslocava o teto
+  de 24 h, a conversa aberta de 7 dias e o painel. O reparo (`disparo:corrigir-horarios-webhook`) lê na Kapso os
+  horários reais das mensagens e troca só o valor igual à versão UTC de um deles. `webhook_calls` não serve para
+  isso: guarda só o resumo. A importação já convertia certo.
 - Status de wamid desconhecido (painel da Kapso, KYC no mesmo número) vira linha `origem=webhook` e conta em
   `Sender::templatesNasUltimas24h()`; `pricing.category` do status vira `payload.categoria`.
 - Preferência de marketing (`whatsapp.contact.marketing_preference_changed`: `status`/`value` stop|stopped|
@@ -636,6 +645,12 @@ no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
   nulo) e `GET /api/v1/campaigns/{id}`. Aprovar/iniciar/pausar/cancelar ficam fora: quatro olhos só no painel.
 
 ## Histórico de atualizações
+
+### 2026-11-06 - Horário do webhook no fuso certo; provável bloqueio passa a ser gravado
+
+Ver 8 e 10.1. Os horários vindos do webhook ficavam 3 h adiantados (UTC sem converter); corrigido, com reparo exato
+pelos horários da Kapso. A guarda de provável bloqueio (KB 2.9) nunca era acionada porque nada gravava
+`provavel_bloqueio_em`: `disparo:marcar-provavel-bloqueio` roda de hora em hora.
 
 ### 2026-10-29 - Painel com gráfico e aderência; histórico com texto; sellers inativos pelo KYC
 Widgets de envios por dia e aderência por template (12); `--conteudo` no histórico da Kapso (7, decisão do Matheus);

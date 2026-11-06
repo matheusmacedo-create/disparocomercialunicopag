@@ -432,7 +432,9 @@ final class ProcessadorDeEventos
         }
 
         try {
-            return CarbonImmutable::createFromTimestamp($timestamp);
+            // No fuso da app: o Carbon 3 devolve UTC, e o Eloquent grava a hora sem converter - até
+            // 06/11/2026 os horários do webhook ficavam 3 h adiantados (disparo:corrigir-horarios-webhook).
+            return CarbonImmutable::createFromTimestamp($timestamp)->setTimezone((string) config('app.timezone'));
         } catch (\Throwable $e) {
             Log::debug('timestamp ilegível no webhook', ['erro' => $e->getMessage()]);
 

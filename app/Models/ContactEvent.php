@@ -63,6 +63,7 @@ class ContactEvent extends Model
             'consentimento' => 'Consentimento registrado',
             'texto_enviado' => 'Texto enviado pelo painel',
             'dados_exportados' => 'Dados do titular exportados',
+            'provavel_bloqueio' => 'Provável bloqueio (template sem entrega há 48 h)',
         ];
     }
 }
