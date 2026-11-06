@@ -146,6 +146,9 @@ class ImportadorSellersInativosTest extends TestCase
 
     public function test_sem_endpoint_nem_arquivo_o_comando_explica(): void
     {
+        // O .env.example (copiado no CI) já traz o endpoint do KYC: o teste não pode depender dele.
+        config(['disparo.unicoapi.sellers_endpoint' => null]);
+
         $this->artisan('disparo:importar-sellers-inativos')
             ->expectsOutputToContain('UNICOPAG_SELLERS_ENDPOINT')
             ->assertFailed();
