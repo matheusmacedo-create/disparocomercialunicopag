@@ -13,7 +13,9 @@ use App\Models\Suppression;
 use App\Models\WebhookCall;
 use App\Models\WhatsappMessage;
 use App\Support\Telefone;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -83,6 +85,19 @@ class KapsoWebhookTest extends TestCase
         $this->assertSame(WhatsappMessage::STATUS_READ, $mensagem->fresh()->status);
         $this->assertSame(CampaignRecipient::STATUS_LIDO, $destinatario->fresh()->status);
         $this->assertSame(1, $campanha->fresh()->lidos);
+    }
+
+    public function test_horario_do_evento_e_gravado_no_fuso_da_app(): void
+    {
+        // 10:22 em Brasília = 13:22 UTC. Até 06/11/2026 ficava gravado 13:22 (UTC sem converter).
+        $quando = CarbonImmutable::parse('2026-11-05 10:22:25', 'America/Sao_Paulo');
+        $this->contato();
+
+        $this->webhook('whatsapp.message.delivered', $this->statusDaMensagem('wamid.FUSO', 'delivered', $quando->timestamp))->assertOk();
+
+        $linha = DB::table('whatsapp_messages')->where('wamid', 'wamid.FUSO')->first();
+        $this->assertStringStartsWith('2026-11-05 10:22:25', (string) $linha->enviado_em);
+        $this->assertStringStartsWith('2026-11-05 10:22:25', (string) $linha->entregue_em);
     }
 
     public function test_falha_131026_marca_sem_whatsapp_e_destinatario_falhou(): void
