@@ -125,7 +125,9 @@ final class ProcessadorDeReguas
             }
         }
 
-        Log::info('Rodada das réguas', array_diff_key($resultado, ['simulacao' => true]));
+        // Rodada vazia (sem régua ativa) a cada 10 min só enche o log: fica em debug.
+        $houveAlgo = collect($resultado)->filter(fn (mixed $v): bool => is_int($v) && $v > 0)->isNotEmpty() || $resultado['parou'] !== null;
+        Log::log($houveAlgo ? 'info' : 'debug', 'Rodada das réguas', array_diff_key($resultado, ['simulacao' => true]));
 
         return $resultado;
     }

@@ -340,6 +340,10 @@ Duas tabelas, porque dois efeitos diferentes:
 `template_nao_aprovado`/`categoria_nao_permitida`/`template_qualidade` (estes pausam a campanha),
 `fora_da_janela`, `teto_diario`, `dia_da_semana`, `fora_da_janela_contato`.
 
+**Disjuntor durante a rodada** `[código 09/11/2026]`: a cada 10 tentativas (qualquer categoria) o executor roda o
+`DisjuntorDeEngajamento`; 131026/131049 em massa pausam só a campanha (`engajamento_pausou`), o resto bloqueia o
+número como antes.
+
 **Descartam o destinatário** (`campaign_recipients.motivo`), nesta ordem: `optout`, `contato_invalido`,
 `suprimido`, `sem_consentimento` (MARKETING a origem externa ou base que exige), `sem_whatsapp` (90 d),
 `provavel_bloqueio` (MARKETING, 180 d), `marketing_carencia` (131049 ou objetivo comercial), `recusou`
@@ -651,6 +655,18 @@ no painel do Forge; `php artisan disparo:diagnostico` tem de terminar sem ✗.
 Ver 8 e 10.1. Os horários vindos do webhook ficavam 3 h adiantados (UTC sem converter); corrigido, com reparo exato
 pelos horários da Kapso. A guarda de provável bloqueio (KB 2.9) nunca era acionada porque nada gravava
 `provavel_bloqueio_em`: `disparo:marcar-provavel-bloqueio` roda de hora em hora.
+
+### 2026-11-09 - Disjuntor de engajamento no meio da rodada `[prod 09/11/2026]` `[código]`
+Verificação da plataforma pedida pelo Matheus. Achado em produção: a campanha #4 (UTILITY, 48 destinatários de
+uma lista "nunca receberam template") teve **46 falhas 131026** (número sem WhatsApp) em 8 minutos e nada parou -
+o disjuntor de engajamento só era avaliado na liberação da primeira leva de MARKETING. Correção: o executor
+avalia o disjuntor a cada 10 tentativas, em qualquer categoria. Regras **da base** (`sem_whatsapp` 131026 e
+`carencia` 131049) agora **pausam só a campanha** (evento `engajamento_pausou`, Discord), sem bloquear o número
+nem cancelar as outras; pausa por base não é desfeita pela sonda: o operador revê a lista e retoma. As demais
+regras (não entregues, opt-outs, lidos) seguem bloqueando o número por qualidade. Resultado do disjuntor ganhou
+`regra`. Também: log "Rodada das réguas" vazio foi para debug (eram 144 linhas/dia sem informação). Sem erros no
+log, fila e webhooks (423 chamadas, todas processadas); 46 contatos sem WhatsApp foram anonimizados a pedido do
+Matheus em 09/11 (ação da operação, não da plataforma).
 
 ### 2026-10-29 - Painel com gráfico e aderência; histórico com texto; sellers inativos pelo KYC
 Widgets de envios por dia e aderência por template (12); `--conteudo` no histórico da Kapso (7, decisão do Matheus);
