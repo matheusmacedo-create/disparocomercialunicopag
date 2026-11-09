@@ -19,7 +19,10 @@ use App\Models\Suppression;
  */
 final class DisjuntorDeEngajamento
 {
-    /** @return array{motivo: ?string, metricas: array<string, mixed>} */
+    /** Regras que falam da BASE (números sem WhatsApp, Meta limitando marketing ao usuário): pausam só a campanha. */
+    public const REGRAS_DA_BASE = ['sem_whatsapp', 'carencia'];
+
+    /** @return array{motivo: ?string, regra: ?string, metricas: array<string, mixed>} */
     public static function avaliar(Campaign $campaign): array
     {
         $cfg = (array) config('disparo.engajamento');
@@ -56,15 +59,15 @@ final class DisjuntorDeEngajamento
             'lidos_2h' => $entreguesMaduros > 0 ? round($lidosMaduros / $entreguesMaduros, 3) : null,
         ];
 
-        $motivo = match (true) {
-            $maduros >= $minimo && $naoEntregues / $maduros >= (float) ($cfg['nao_entregues_max'] ?? 0.1) => sprintf('%d%% dos templates enviados há 30 min não foram entregues (provável bloqueio em massa)', (int) round(100 * $naoEntregues / $maduros)),
-            $entregues >= $minimo && $optouts / $entregues >= (float) ($cfg['optouts_max'] ?? 0.01) => sprintf('%d pedidos para parar em %d entregues', $optouts, $entregues),
-            $tentativas >= $minimo && $carencias / $tentativas >= (float) ($cfg['carencia_131049_max'] ?? 0.05) => sprintf('%d%% de 131049: a Meta está limitando marketing a esta base', (int) round(100 * $carencias / $tentativas)),
-            $tentativas >= $minimo && $semWhatsApp / $tentativas >= (float) ($cfg['sem_whatsapp_131026_max'] ?? 0.05) => sprintf('%d%% de 131026: base com números sem WhatsApp', (int) round(100 * $semWhatsApp / $tentativas)),
-            $entreguesMaduros >= $minimo && $lidosMaduros / $entreguesMaduros < (float) ($cfg['lidos_min'] ?? 0.3) => sprintf('só %d%% dos entregues há 2 h foram lidos', (int) round(100 * $lidosMaduros / $entreguesMaduros)),
-            default => null,
+        [$regra, $motivo] = match (true) {
+            $maduros >= $minimo && $naoEntregues / $maduros >= (float) ($cfg['nao_entregues_max'] ?? 0.1) => ['nao_entregues', sprintf('%d%% dos templates enviados há 30 min não foram entregues (provável bloqueio em massa)', (int) round(100 * $naoEntregues / $maduros))],
+            $entregues >= $minimo && $optouts / $entregues >= (float) ($cfg['optouts_max'] ?? 0.01) => ['optouts', sprintf('%d pedidos para parar em %d entregues', $optouts, $entregues)],
+            $tentativas >= $minimo && $carencias / $tentativas >= (float) ($cfg['carencia_131049_max'] ?? 0.05) => ['carencia', sprintf('%d%% de 131049: a Meta está limitando marketing a esta base', (int) round(100 * $carencias / $tentativas))],
+            $tentativas >= $minimo && $semWhatsApp / $tentativas >= (float) ($cfg['sem_whatsapp_131026_max'] ?? 0.05) => ['sem_whatsapp', sprintf('%d%% de 131026: base com números sem WhatsApp', (int) round(100 * $semWhatsApp / $tentativas))],
+            $entreguesMaduros >= $minimo && $lidosMaduros / $entreguesMaduros < (float) ($cfg['lidos_min'] ?? 0.3) => ['lidos', sprintf('só %d%% dos entregues há 2 h foram lidos', (int) round(100 * $lidosMaduros / $entreguesMaduros))],
+            default => [null, null],
         };
 
-        return ['motivo' => $motivo, 'metricas' => $metricas];
+        return ['motivo' => $motivo, 'regra' => $regra, 'metricas' => $metricas];
     }
 }

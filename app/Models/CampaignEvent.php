@@ -53,6 +53,7 @@ class CampaignEvent extends Model
             'concluida' => 'Concluída',
             'disjuntor' => 'Disjuntor (recusa da conta)',
             'engajamento' => 'Disjuntor de engajamento',
+            'engajamento_pausou' => 'Disjuntor de engajamento (campanha pausada, base com problema)',
             'categoria_mudou' => 'Template reclassificado pela Meta',
             'aprovacao_invalidada' => 'Aprovação invalidada (algo mudou)',
             'tranche_enviada' => 'Primeira leva enviada',

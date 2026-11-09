@@ -183,8 +183,20 @@ final class ExecutorDeCampanha
             ->get();
 
         $saidosNaRodada = 0;
+        $desdeUltimaAvaliacao = 0;
 
         foreach ($pendentes as $destinatario) {
+            // Disjuntor durante a rodada, em qualquer categoria: a cada 10 tentativas confere 131026/131049 em
+            // massa, opt-outs e não entregues. Em 09/11/2026 uma campanha UTILITY mandou 48 e 46 voltaram 131026
+            // sem nada parar, porque a avaliação só acontecia ao liberar a primeira leva de MARKETING.
+            if (! $simulacao && ! $sonda && $desdeUltimaAvaliacao >= 10) {
+                $desdeUltimaAvaliacao = 0;
+
+                if ($this->disjuntorNaRodada($campaign, $sender, $resultado)) {
+                    break;
+                }
+            }
+
             if ((microtime(true) - $inicio) > $tempoMaximo) {
                 $resultado['parou'] = 'tempo_da_rodada';
                 break;
@@ -245,6 +257,7 @@ final class ExecutorDeCampanha
                 $simulacao ? $resultado['simulados']++ : $resultado['enviados']++;
                 $orcamento--;
                 $saidosNaRodada++;
+                $desdeUltimaAvaliacao++;
                 $transitoriasSeguidas = 0;
 
                 if ($sonda) {
@@ -362,6 +375,7 @@ final class ExecutorDeCampanha
             // Recusa do contato (sem WhatsApp, variável vazia, marketing parado, 131049...): só ele.
             $this->falhar($destinatario, $mensagem, $excecao);
             $resultado['falhas']++;
+            $desdeUltimaAvaliacao++;
             $transitoriasSeguidas = 0;
 
             if ($sonda) {
@@ -493,8 +507,33 @@ final class ExecutorDeCampanha
     /** @param  array{motivo: ?string, metricas: array<string, mixed>}  $avaliacao */
     private function bloquearPorEngajamento(Campaign $campaign, Sender $sender, array $avaliacao): void
     {
-        $campaign->registrarEvento('engajamento', $avaliacao['metricas'] + ['motivo' => $avaliacao['motivo']], null);
+        $campaign->registrarEvento('engajamento', $avaliacao['metricas'] + ['motivo' => $avaliacao['motivo'], 'regra' => $avaliacao['regra'] ?? null], null);
+
+        // Problema da BASE (números sem WhatsApp, Meta limitando marketing ao usuário): a campanha para para o
+        // operador rever a lista; o número não tem culpa e continua servindo as outras campanhas e as réguas.
+        if (in_array($avaliacao['regra'] ?? null, DisjuntorDeEngajamento::REGRAS_DA_BASE, true)) {
+            $this->pausarCampanha($campaign, 'Disjuntor de engajamento: '.$avaliacao['motivo'].' Reveja a base antes de retomar.', 'engajamento_pausou');
+            $this->discord->enviar('Campanha pausada pelo disjuntor', sprintf('"%s" (remetente "%s"): %s. A campanha ficou pausada; o número segue normal.', $campaign->nome, $sender->nome, $avaliacao['motivo']), DiscordNotifier::COR_ALERTA, [], true);
+
+            return;
+        }
+
         $this->bloquearPorQualidade($campaign, $sender, 'Disjuntor de engajamento na campanha "'.$campaign->nome.'": '.$avaliacao['motivo']);
+    }
+
+    /** Avaliação do disjuntor no meio da rodada (qualquer categoria). True = parou a campanha. */
+    private function disjuntorNaRodada(Campaign $campaign, Sender $sender, array &$resultado): bool
+    {
+        $avaliacao = DisjuntorDeEngajamento::avaliar($campaign);
+
+        if ($avaliacao['motivo'] === null) {
+            return false;
+        }
+
+        $this->bloquearPorEngajamento($campaign, $sender, $avaliacao);
+        $resultado['parou'] = 'engajamento';
+
+        return true;
     }
 
     private function pausarCampanha(Campaign $campaign, string $motivo, string $evento = 'pausada'): void

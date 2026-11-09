@@ -450,4 +450,24 @@ class ExecutorDeCampanhaTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00', 'America/Sao_Paulo'));
         $this->assertSame(1, app(ExecutorDeCampanha::class)->rodar($campanha->fresh())['enviados']);
     }
+
+    public function test_131026_em_massa_pausa_a_campanha_no_meio_da_rodada_sem_bloquear_o_numero(): void
+    {
+        // Base ruim: toda tentativa volta 131026. Em 09/11/2026 uma UTILITY mandou 48 e 46 falharam assim sem parar.
+        $this->fakeKapso(Http::response($this->recusa(131026, 'Message undeliverable'), 400));
+        $campanha = $this->campanha($this->utility, 30);
+
+        $resultado = app(ExecutorDeCampanha::class)->rodar($campanha, 30);
+
+        $this->assertSame('engajamento', $resultado['parou']);
+        $this->assertSame(20, $resultado['falhas'], 'o disjuntor julga a cada 10 tentativas, a partir da amostra mínima (20)');
+        $this->assertSame(Campaign::STATUS_PAUSADA, $campanha->fresh()->status);
+        $this->assertStringContainsString('131026', (string) $campanha->fresh()->pausada_motivo);
+        $this->assertSame(10, $campanha->pendentes(), 'o resto fica para o operador rever a base');
+        $this->assertFalse($this->sender->fresh()->bloqueadoPorQualidade(), 'número sem culpa: não é bloqueio de qualidade');
+        $this->assertFalse($this->sender->fresh()->pausado());
+        $this->assertTrue($campanha->events()->where('evento', 'engajamento')->exists());
+        $this->assertTrue($campanha->events()->where('evento', 'engajamento_pausou')->exists());
+        $this->assertFalse(app(ExecutorDeCampanha::class)->pausadaPeloDisjuntor($campanha->fresh()), 'pausa por base não é desfeita por sonda: precisa de gente');
+    }
 }
